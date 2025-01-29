@@ -1,6 +1,6 @@
+-- A Lua script that aims to be helpful for creating tool-assisted speedruns.
 -- Authors: Suuper; some checkpoint and pointer stuffs from MKDasher
 -- Also a thanks to the HaroohiePals team for figuring out some data structure things
--- A Lua script that aims to be helpful for creating tool-assisted speedruns.
 
 -- Script options ---------------------
 -- These are the default values. If you have a MKDS_Info-Config.txt file then config settings will be read from that file.
