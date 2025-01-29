@@ -175,13 +175,13 @@ local function getDirectionsFrom2d(camera)
 end
 
 local PIXEL = 1 -- line, point, color
-local CIRCLE = 2 -- circle, center, radius, line, fill
+local CIRCLE = 2 -- circle, center, radius (2D), line, fill
 local LINE = 3 -- line, point1, point2, color
 local POLYGON = 4 -- polygon, verts, line, fill
 local TEXT = 5 -- text, point, string
 
-local HITBOX = 6
-local HITBOX_PAIR = 7
+local HITBOX = 6 -- hitbox, object, hitboxType, color
+local HITBOX_PAIR = 7 -- hitbox_pair, object, racer
 
 local que = {}
 
@@ -282,48 +282,54 @@ local function processQue(camera)
 				local point = point3Dto2D(v[2], camera)
 				makeCircle(point, v[3], v[4], v[5])
 			elseif v[1] == HITBOX then
-				local smallsize = 300
 				local object = v[2]
-				local point = point3Dto2D(v[3], camera)
+				local hitboxType = v[3]
 				local color = v[4]
+				
 				if camera.overlay == true and (color & 0xff000000) == 0xff000000 then
 					color = color & 0x50ffffff
 				end			
 				local skipPolys = false
-				if object.hitboxType == "spherical" or object.hitboxType == "item" then
-					local radius = scaleAtDistance(v[3], object.radius, camera)
+				if hitboxType == "spherical" then
+					local point2D = point3Dto2D(object.objPos, camera)
+					local radius = scaleAtDistance(object.objPos, object.objRadius, camera)
 					if radius > cw then
-						radius = scaleAtDistance(point, smallsize, camera)
-						makeCircle(point, radius, color, color & 0x3fffffff)
-						radius = scaleAtDistance(point, 1, camera)
-						makeCircle(point, radius, color, color)
-						if object.preMovementPosForObjects ~= nil then
-							point = point3Dto2D(object.preMovementPosForObjects, camera)
+						-- Small circles, so we can zoom in on racers to see the center
+						local smallsize = 300
+						radius = scaleAtDistance(object.objPos, smallsize, camera)
+						makeCircle(point2D, radius, color, color & 0x3fffffff)
+						radius = scaleAtDistance(object.objPos, 1, camera)
+						makeCircle(point2D, radius, color, color)
+						if object.preMovementObjPos ~= nil then
+							point2D = point3Dto2D(object.preMovementObjPos, camera)
 							color = 0xff4060a0
 							if camera.overlay == true then
 								color = (color & 0xffffff) | 0x50000000
 							end
-							radius = scaleAtDistance(point, smallsize, camera)
-							makeCircle(point, radius, color, color & 0x3fffffff)
-							radius = scaleAtDistance(point, 1, camera)
-							makeCircle(point, radius, color, color)
+							radius = scaleAtDistance(object.objPos, smallsize, camera)
+							makeCircle(point2D, radius, color, color & 0x3fffffff)
+							radius = scaleAtDistance(object.objPos, 1, camera)
+							makeCircle(point2D, radius, color, color)
 						end
 					else
-						makeCircle(point, radius, color, color)
+						makeCircle(point2D, radius, color, color)
 					end
-				elseif object.hitboxType == "cylindrical" then
+				elseif hitboxType == "item" then
+					local radius = scaleAtDistance(object.itemPos, object.itemRadius, camera)
+					makeCircle(point3Dto2D(object.itemPos, camera), radius, color, color)
+				elseif hitboxType == "cylindrical" then
 					-- A circle is only good for top-down view.
 					if Vector.equals(camera.rotationVector, {0,-0x1000,0}) then
 						skipPolys = true
-						makeCircle(point, scaleAtDistance(v[3], object.radius, camera), color, color)
+						makeCircle(point3Dto2D(object.objPos, camera), scaleAtDistance(v[3], object.objRadius, camera), color, color)
 					end
 				end
 				if not skipPolys and object.polygons ~= nil and #object.polygons ~= 0 then
 					local fill = color
-					if object.cylinder2 == true or object.hitboxType == "cylindrical" then
+					if object.cylinder2 == true or hitboxType == "cylindrical" then
 						fill = nil
 					end
-					if object.hitboxType == "boxy" then
+					if hitboxType == "boxy" then
 						color = 0xffffffff
 						-- We separate fill and outline draws because BizHawk's draw system has issues.
 						for j = 1, #object.polygons do
@@ -353,21 +359,33 @@ local function processQue(camera)
 				end
 			elseif v[1] == HITBOX_PAIR then
 				local object = v[2]
-				local racer = v[4]
+				local racer = v[3]
+				local oPos = object.objPos
+				local rPos = racer.objPos
+				if object.hitboxType == "item" then
+					oPos = object.itemPos
+					rPos = racer.itemPos
+				end
 				if camera.orthographic == true and object.hitboxType == "spherical" or object.hitboxType == "item" then
-					local relative = Vector.subtract(v[3], v[5])
+					local relative = Vector.subtract(oPos, rPos)
 					local vDist = math.abs(Vector.dotProduct_float(relative, camera.rotationVector))
-					local totalRadius = object.radius + racer.radius
+					local oradius = object.objRadius
+					local rradius = racer.objRadius
+					if object.hitboxType == "item" then
+						oradius = object.itemRadius
+						rradius =racer.itemRadius
+					end
+					local totalRadius = oradius + rradius
 					if totalRadius > vDist then
 						local touchHorizDist = math.sqrt(totalRadius * totalRadius - vDist * vDist)
-						makeCircle(point3Dto2D(v[5], camera), scaleAtDistance(v[5], touchHorizDist * object.radius / totalRadius, camera), 0xffffffff, nil)
-						makeCircle(point3Dto2D(v[3], camera), scaleAtDistance(v[3], touchHorizDist * racer.radius / totalRadius, camera), 0xffffffff, nil)
+						makeCircle(point3Dto2D(rPos, camera), scaleAtDistance(rPos, touchHorizDist * rradius / totalRadius, camera), 0xffffffff, nil)
+						makeCircle(point3Dto2D(oPos, camera), scaleAtDistance(oPos, touchHorizDist * oradius / totalRadius, camera), 0xffffffff, nil)
 					end
 				elseif object.hitboxType == "boxy" then
 					local racerPolys = Objects.getBoxyPolygons(
-						racer.posForObjects,
+						racer.objPos,
 						object.orientation,
-						{ racer.radius, racer.radius, racer.radius }
+						{ racer.objRadius, racer.objRadius, racer.objRadius }
 					)
 					for j = 1, #racerPolys do
 						makePolygon(racerPolys[j], 0xffffffff, nil)
@@ -397,13 +415,39 @@ local function processQue(camera)
 	return ops
 end
 
-local function makeRacerHitboxes(allRacers)
-	-- Primary hitbox circle
-	addToDrawingQue(-3, { HITBOX, allRacers[0], allRacers[0].posForObjects, 0xff0000ff })
-	lineFromVector(allRacers[0].posForObjects, allRacers[0].movementDirection, allRacers[0].radius, "white", 5)
-	for i = 1, #allRacers do
-		addToDrawingQue(-1, { HITBOX, allRacers[1], allRacers[i].posForObjects, 0x48ff5080 })
-		lineFromVector(allRacers[i].posForObjects, allRacers[i].movementDirection, allRacers[i].radius, 0xcccccccc, 5)
+local function makeRacerHitboxes(allRacers, focusedRacer)
+	local count = #allRacers
+	local isTT = count <= 2
+	-- Not the best TT detection. But, if we are in TT mode we want to only show for-triangle hitboxes!
+	-- Outside of TT, non-player hitboxes will be drawn as objects instead.
+	if not isTT then count = 1 end
+
+	-- Primary hitbox circle is blue
+	local color = 0xff0000ff
+	local movementColor = 0xffffffff
+	local p = -3
+	for i = 0, count do
+		local racer = allRacers[i]
+		local pos = racer.itemPos
+		local radius = racer.itemRadius
+		local type = "item"
+		if racer == focusedRacer or isTT then
+			pos = racer.objPos
+			radius = racer.objRadius
+			type = "spherical"
+		end
+		addToDrawingQue(p, { HITBOX, racer, type, color })
+		lineFromVector(pos, allRacers[i].movementDirection, radius, movementColor, 5)
+		-- Others are a translucent red
+		color = 0x48ff5080
+		movementColor = 0xcccccccc
+		p = -1
+	end
+
+	if not isTT and focusedRacer ~= allRacers[0] then
+		local racer = focusedRacer
+		addToDrawingQue(p, { HITBOX, racer, "spherical", color })
+		lineFromVector(racer.objPos, racer.movementDirection, racer.objRadius, movementColor, 5)
 	end
 end	
 
@@ -418,14 +462,14 @@ local function drawTriangle(tri, d, racer, dotSize)
 		if touchData.push then
 			if d.controlsSlope then
 				color = 0x4088ff88
-				lineFromVector(racer.posForObjects, tri.surfaceNormal, racer.radius, 0xff00ff00, 5)
+				lineFromVector(racer.objPos, tri.surfaceNormal, racer.objRadius, 0xff00ff00, 5)
 			elseif d.isWall then
 				color = 0x20ffff22
 			else
 				color = 0x50ffffff
 			end
 		else
-			lineFromVector(racer.posForObjects, tri.surfaceNormal, racer.radius, 0xffff0000, 5)
+			lineFromVector(racer.objPos, tri.surfaceNormal, racer.objRadius, 0xffff0000, 5)
 		end
 		addToDrawingQue(-5, { POLYGON, tri.vertex, 0, color })
 	end
@@ -458,7 +502,7 @@ local function drawTriangle(tri, d, racer, dotSize)
 	--if and tri.surfaceNormal[2] ~= 0 and tri.surfaceNormal[2] ~= 4096 then
 		--local center = Vector.add(Vector.add(tri.vertex[1], tri.vertex[2]), tri.vertex[3])
 		--center = Vector.multiply(center, 1 / 3)
-		--lineFromVector(center, tri.surfaceNormal, racer.radius, color, 4)
+		--lineFromVector(center, tri.surfaceNormal, racer.objRadius, color, 4)
 	--end
 end
 local function makeKclQue(viewport, focusObject, allTriangles, textonly)
@@ -469,12 +513,13 @@ local function makeKclQue(viewport, focusObject, allTriangles, textonly)
 			end
 		end
 	end
+	if focusObject == nil then return end
 
 	local touchData = KCL.getCollisionDataForRacer({
-		pos = focusObject.posForObjects,
-		previousPos = focusObject.preMovementPosForObjects,
-		radius = focusObject.radius,
-		flags = 1, -- assume for now it is a racer
+		pos = focusObject.objPos,
+		previousPos = focusObject.preMovementObjPos,
+		radius = focusObject.objRadius,
+		flags = 1, -- TODO: assume for now it is a racer
 	})
 
 	if textonly ~= true then
@@ -537,26 +582,21 @@ end
 
 local function _drawObjectCollision(racer, obj)	
 	local objColor = 0xff40c0e0
-	local pos = obj.pos
 	if obj.typeId == 106 then objColor = 0xffffff11 end
-	addToDrawingQue(-4, { HITBOX, obj, pos, objColor })
+	addToDrawingQue(-4, { HITBOX, obj, obj.hitboxType, objColor })
 	if obj.hitboxType == "spherical" or obj.hitboxType == "item" then
 		-- White circles to indicate size of hitbox cross-section at the current elevation.
 		if racer ~= nil then
-			local rPos = racer.posForObjects
-			if obj.hitboxType == "item" then
-				rPos = racer.posForItems
-			end
-			addToDrawingQue(-1, { HITBOX_PAIR, obj, pos, racer, rPos })
+			addToDrawingQue(-1, { HITBOX_PAIR, obj, racer })
 		end
 	elseif obj.hitboxType == "boxy" and racer ~= nil then
-		addToDrawingQue(-2, { HITBOX_PAIR, obj, pos, racer, racer.posForObjects })
+		addToDrawingQue(-2, { HITBOX_PAIR, obj, racer })
 	end
 end
 local function makeObjectsQue(objects, racer)
 	if objects == nil then error("Expected objects list to not be nil.") end
 	for i = 1, #objects do
-		if objects[i] == racer.nearestObject then
+		if racer ~= nil and objects[i] == racer.nearestObject then
 			_drawObjectCollision(racer, objects[i])
 		else
 			_drawObjectCollision(nil, objects[i])
@@ -594,25 +634,29 @@ end
 
 local function processPackage(camera, package)
 	que = {}
-	local racer = package.allRacers[camera.racerId]
+	local thing
+	if camera.racerId ~= -1 then
+		thing = package.allRacers[camera.racerId]
+	else
+		thing = camera.obj
+	end
 	if camera.active then
 		if camera.drawKcl == true then
 			if camera.racerId == nil then error("no racer id") end
-			if racer == nil then error("no racer object") end
-			makeKclQue(camera, racer, (camera.renderAllTriangles and package.allTriangles) or nil)
+			makeKclQue(camera, thing, (camera.renderAllTriangles and package.allTriangles) or nil)
 		end
 		if camera.drawObjects == true then
-			makeObjectsQue(package.objects, racer)
+			makeObjectsQue(package.objects, thing)
 		end
 		if camera.drawKcl == true or camera.drawObjects == true then
-			makeRacerHitboxes(package.allRacers)
+			makeRacerHitboxes(package.allRacers, thing)
 		end
 		if camera.drawCheckpoints == true then
-			makeCheckpointsQue(package.checkpoints, racer)
+			makeCheckpointsQue(package.checkpoints, thing)
 		end
 	elseif camera.isPrimary then
 		-- We always show the text for nearest+touched triangles.
-		makeKclQue(camera, racer, (camera.renderAllTriangles and package.allTriangles) or nil, true)
+		makeKclQue(camera, thing, (camera.renderAllTriangles and package.allTriangles) or nil, true)
 	end
 
 	return processQue(camera)

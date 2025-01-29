@@ -120,18 +120,24 @@ if true then -- I just want to collapse this block in my editor.
 	t[411] = "cheep cheep"; t[412] = "truck";
 	t[413] = "snowman"; t[414] = "coffin";
 	t[415] = "bats";
-	t[0x1a2] = "bullet bill"; t[0x1a3] = "walking tree";
-	t[0x1a4] = "flamethrower"; t[0x1a5] = "stray chain chomp";
-	t[0x1ac] = "crab";
-	t[0x1a6] = "piranha plant"; t[0x1a7] = "rocky wrench";
-	t[0x1a8] = "bumper"; t[0x1a9] = "flipper";
-	t[0x1af] = "fireballs"; t[0x1b0] = "pinball";
-	t[0x1b1] = "boulder"; t[0x1b2] = "pokey";
-	t[0x1f5] = "bully"; t[0x1f6] = "Chief Chilly";
+	t[418] = "bullet bill"; t[419] = "walking tree";
+	t[420] = "flamethrower"; t[421] = "stray chain chomp";
+	t[422] = "piranha plant"; t[428] = "rocky wrench";
+	t[424] = "bumper"; t[425] = "flipper";
+	t[428] = "crab";
+	t[431] = "fireballs"; t[432] = "pinball";
+	t[433] = "boulder"; t[434] = "pokey";
+	t[436] = "strawberry bumper"; t[437] = "Strawberry Bumper";
+	t[501] = "bully"; t[502] = "Chief Chilly";
 	t[0x1f8] = "King Bomb-omb";
 	t[0x1fb] = "Eyerok"; t[0x1fd] = "King Boo";
 	t[0x1fe] = "Wiggler";
 end
+
+local FLAG_DYNAMIC = 0x1000
+local FLAG_MAPOBJ  = 0x2000
+local FLAG_ITEM    = 0x4000
+local FLAG_RACER   = 0x8000
 
 local function getBoxyDistances(obj, pos, radius)
 	local posDelta = Vector.subtract(pos, obj.dynPos)
@@ -183,7 +189,7 @@ local function getCylinderDistances(obj, pos, radius)
 	local bHeight = obj.bHeight
 	if bHeight == nil then bHeight = obj.height end
 	local orientedDistanceTo = {
-		math.abs(orientedPosDelta.h) - radius - obj.radius,
+		math.abs(orientedPosDelta.h) - radius - obj.objRadius,
 		math.max(
 			orientedPosDelta.v - radius - obj.height,
 			-(orientedPosDelta.v + radius + bHeight)
@@ -223,36 +229,36 @@ local function getDetailsForBoxyObject(obj)
 		obj.backSizes[3] = 0
 	elseif obj.hitboxFunc == Memory.hitboxFuncs.pendulum then
 		obj.sizes = {
-			obj.radius,
-			obj.radius,
+			obj.objRadius,
+			obj.objRadius,
 			memory.read_s32_le(obj.ptr + 0x108),
 		}
 	elseif obj.hitboxFunc == Memory.hitboxFuncs.rockyWrench then
 		obj.sizes = {
-			obj.radius,
+			obj.objRadius,
 			memory.read_s32_le(obj.ptr + 0xa0),
-			obj.radius,
+			obj.objRadius,
 		}
 	else
 		obj.sizes = read_pos(obj.ptr + 0x58)
 	end
-	obj.dynPos = obj.pos
-	obj.polygons = getBoxyPolygons(obj.pos, obj.orientation, obj.sizes, obj.backSizes)
+	obj.dynPos = obj.objPos
+	obj.polygons = getBoxyPolygons(obj.objPos, obj.orientation, obj.sizes, obj.backSizes)
 end
 local function getDetailsForCylinder2Object(obj, isBumper)
 	obj.cylinder2 = true
-	obj.dynPos = obj.pos -- It may not be dynamic, but getCylinderDistances expexts this
+	obj.dynPos = obj.objPos -- It may not be dynamic, but getCylinderDistances expexts this
 	
 	if isBumper then
 		obj.bHeight = 0
 		if memory.read_u16_le(obj.ptr + 2) & 0x800 == 0 and memory.read_u32_le(obj.ptr + 0x11c) == 1 then
-			obj.radius = mul_fx(obj.radius, memory.read_u32_le(obj.ptr + 0xbc))
+			obj.objRadius = mul_fx(obj.objRadius, memory.read_u32_le(obj.ptr + 0xbc))
 		end
 	else
 		obj.bHeight = obj.height
 	end
 	
-	obj.polygons = getCylinderPolygons(obj.pos, obj.orientation, obj.radius, obj.height, obj.bHeight)
+	obj.polygons = getCylinderPolygons(obj.objPos, obj.orientation, obj.objRadius, obj.height, obj.bHeight)
 end
 local function getDetailsForDynamicBoxyObject(obj)
 	obj.sizes = read_pos(obj.ptr + 0x100)
@@ -262,10 +268,10 @@ local function getDetailsForDynamicBoxyObject(obj)
 	obj.polygons = getBoxyPolygons(obj.dynPos, obj.orientation, obj.sizes, obj.backSizes)
 end
 local function getDetailsForDynamicCylinderObject(obj)
-	obj.radius = memory.read_s32_le(obj.ptr + 0x100)
+	obj.objRadius = memory.read_s32_le(obj.ptr + 0x100)
 	obj.height = memory.read_s32_le(obj.ptr + 0x104)
 	obj.dynPos = read_pos(obj.ptr + 0xf4)
-	obj.polygons = getCylinderPolygons(obj.dynPos, obj.orientation, obj.radius, obj.height, obj.height)
+	obj.polygons = getCylinderPolygons(obj.dynPos, obj.orientation, obj.objRadius, obj.height, obj.height)
 end
 local function getMapObjDetails(obj)
 	local objPtr = obj.ptr
@@ -275,7 +281,7 @@ local function getMapObjDetails(obj)
 	obj.boxy = false
 	obj.cylinder = false
 	
-	obj.radius = memory.read_s32_le(objPtr + 0x58)
+	obj.objRadius = memory.read_s32_le(objPtr + 0x58)
 	obj.height = memory.read_s32_le(objPtr + 0x5C)
 	obj.orientation = {
 		read_pos(obj.ptr + 0x28),
@@ -298,7 +304,7 @@ local function getMapObjDetails(obj)
 			hitboxType = "spherical"
 		elseif hbType == 2 then
 			hitboxType = "cylindrical"
-			obj.polygons = getCylinderPolygons(obj.pos, obj.orientation, obj.radius, obj.height, obj.height)
+			obj.polygons = getCylinderPolygons(obj.objPos, obj.orientation, obj.objRadius, obj.height, obj.height)
 		elseif hbType == 3 then
 			hitboxType = "cylinder2" -- I can't find an object in game that directly uses this.
 			getDetailsForCylinder2Object(obj, false)
@@ -320,7 +326,7 @@ local function getMapObjDetails(obj)
 				getDetailsForBoxyObject(obj)
 			elseif obj.hitboxFunc == Memory.hitboxFuncs.pendulum then
 				hitboxType = "spherical"
-				obj.radius = memory.read_s32_le(obj.ptr + 0x104)
+				obj.objRadius = memory.read_s32_le(obj.ptr + 0x104)
 				getDetailsForBoxyObject(obj)
 				obj.multiBox = true
 			elseif obj.hitboxFunc == Memory.hitboxFuncs.rockyWrench then
@@ -339,15 +345,27 @@ local function getMapObjDetails(obj)
 	if hitboxType == "" then hitboxType = "no hitbox" end
 	obj.hitboxType = hitboxType
 end
+local itemNames = { -- IDs according to list of itemsets
+	"red shell", "banana", "mushroom",
+	"star", "blue shell", "lightning",
+	"fake item box", "itembox?", "bomb",
+	"blooper", "boo", "gold mushroom",
+	"bullet bill",
+}
+itemNames[0] = "green shell"
 local function getItemDetails(obj)
 	local ptr = obj.ptr
-	obj.radius = memory.read_s32_le(ptr + 0xE0)
-	obj.typeId = 0 -- TODO
-	obj.type = "item" -- TODO: which kind?
+	obj.itemRadius = memory.read_s32_le(ptr + 0xE0)
+	obj.objRadius  = memory.read_s32_le(ptr + 0xDC)
+	obj.itemTypeId = memory.read_s32_le(ptr + 0x44)
+	obj.itemName = itemNames[obj.itemTypeId]
+	obj.itemPos = obj.objPos
 	obj.hitboxType = "item"
 end
 local function getRacerObjDetails(obj)
-	obj.radius = memory.read_s32_le(obj.ptr + 0x1d0)
+	obj.objRadius = memory.read_s32_le(obj.ptr + 0x1d0)
+	obj.itemRadius = obj.objRadius
+	obj.itemPos = read_pos(obj.ptr + 0x1d8)
 	obj.type = "racer"
 	obj.hitboxType = "item"
 end
@@ -360,11 +378,13 @@ local function isGhost(objPtr)
 end
 local function getObjectDetails(obj)
 	local flags = obj.flags
-	if flags & 0x2000 ~= 0 then
+	if flags & FLAG_MAPOBJ ~= 0 then
+		obj.isMapObject = true
 		getMapObjDetails(obj)
-	elseif flags & 0x4000 ~= 0 then
+	elseif flags & FLAG_ITEM ~= 0 then
+		obj.isItem = true
 		getItemDetails(obj)
-	elseif flags & 0x8000 ~= 0 then
+	elseif flags & FLAG_RACER ~= 0 then
 		getRacerObjDetails(obj)
 	else
 		return
@@ -412,35 +432,32 @@ local function getNearbyObjects(racer, dist)
 				local skip = false
 				local obj = {
 					id = id,
-					pos = read_pos(get_s32(objData, current + 0xC)),
+					objPos = read_pos(get_s32(objData, current + 0xC)),
 					flags = flags,
 					ptr = objPtr,
 				}
-				if flags & 0x2000 ~= 0 then
-					obj.isMapObject = true
+				if flags & FLAG_MAPOBJ ~= 0 then
 					obj.typeId = memory.read_s16_le(obj.ptr)
 					if obj.typeId == 0x68 and isCoinCollected(objPtr) then
 						skip = true
 					end
-				elseif flags & 0x8000 ~= 0 then
+				elseif flags & FLAG_RACER ~= 0 then
 					if isGhost(objPtr) or objPtr == racer.ptr then
 						skip = true
 					end	
-				elseif flags & 0x5000 == 0 then
-					-- 0x4000: item
-					-- 0x1000: dynamic object
+				elseif flags & (FLAG_DYNAMIC | FLAG_ITEM) == 0 then
 					skip = true
 				end
 				if not skip then
-					local racerPos = racer.posForObjects
-					if flags & 0x4000 ~= 0 then
-						racerPos = racer.posForItems
-					elseif flags & 0x8000 ~= 0 then
-						racerPos = racer.posForItems
-						obj.pos = read_pos(obj.ptr + 0x1d8)
+					local racerPos = racer.objPos
+					if flags & FLAG_ITEM ~= 0 then
+						racerPos = racer.itemPos
+					elseif flags & FLAG_RACER ~= 0 then
+						racerPos = racer.itemPos
+						obj.objPos = read_pos(obj.ptr + 0x1d8)
 					end
-					local dx = racerPos[1] - obj.pos[1]
-					local dz = racerPos[3] - obj.pos[3]
+					local dx = racerPos[1] - obj.objPos[1]
+					local dz = racerPos[3] - obj.objPos[3]
 					local d = dx * dx + dz * dz
 					if d <= dist then
 						nearbyObjects[#nearbyObjects + 1] = obj
@@ -468,34 +485,38 @@ local function getNearbyObjects(racer, dist)
 		getObjectDetails(obj)
 
 		if obj.hitboxType == "cylindrical" then
-			local relative = Vector.subtract(racer.posForObjects, obj.pos)
+			local relative = Vector.subtract(racer.objPos, obj.objPos)
 			local distance = math.sqrt(relative[1] * relative[1] + relative[3] * relative[3])
-			obj.distance = distance - racer.radius - obj.radius
+			obj.distance = distance - racer.objRadius - obj.objRadius
 			-- TODO: Check vertical distance?
-		elseif obj.hitboxType == "spherical" or obj.hitboxType == "item" then
-			local relative = Vector.subtract(racer.posForObjects, obj.pos)
+		elseif obj.hitboxType == "spherical" then
+			local relative = Vector.subtract(racer.objPos, obj.objPos)
 			local distance = math.sqrt(relative[1] * relative[1] + relative[2] * relative[2] + relative[3] * relative[3])
-			obj.distance = distance - racer.radius - obj.radius
+			obj.distance = distance - racer.objRadius - obj.objRadius
 			-- Special object: pendulum
 			if obj.hitboxFunc == Memory.hitboxFuncs.pendulum then
-				local relative = Vector.subtract(racer.posForObjects, obj.pos)
+				relative = Vector.subtract(racer.objPos, obj.objPos)
 				obj.distanceComponents = {
 					h = math.floor(obj.distance),
-					v = Vector.dotProduct_t(relative, obj.orientation[3]) - racer.radius - obj.sizes[3],
+					v = Vector.dotProduct_t(relative, obj.orientation[3]) - racer.objRadius - obj.sizes[3],
 				}
 				obj.distance = math.max(obj.distanceComponents.h, obj.distanceComponents.v)
 			end
+		elseif obj.hitboxType == "item" then
+			local relative = Vector.subtract(racer.itemPos, obj.itemPos)
+			local distance = math.sqrt(relative[1] * relative[1] + relative[2] * relative[2] + relative[3] * relative[3])
+			obj.distance = distance - racer.itemRadius - obj.itemRadius
 		elseif obj.boxy then
-			obj.distanceComponents = getBoxyDistances(obj, racer.posForObjects, racer.radius)
+			obj.distanceComponents = getBoxyDistances(obj, racer.objPos, racer.objRadius)
 			-- TODO: Do all dynamic boxy objects have racer-spherical hitboxes?
 			-- Also TODO: Find a nicer way to display this maybe?
-			obj.innerDistComps = getBoxyDistances(obj, racer.posForObjects, 0)
+			obj.innerDistComps = getBoxyDistances(obj, racer.objPos, 0)
 			obj.distance = obj.distanceComponents[4]
 		elseif obj.dynamicType == "cylinder" or obj.hitboxType == "cylinder2" then
-			obj.distanceComponents = getCylinderDistances(obj, racer.posForObjects, racer.radius)
+			obj.distanceComponents = getCylinderDistances(obj, racer.objPos, racer.objRadius)
 			obj.distance = obj.distanceComponents.d
 		else
-			local relative = Vector.subtract(racer.posForObjects, obj.pos)
+			local relative = Vector.subtract(racer.objPos, obj.objPos)
 			obj.distance = math.sqrt(relative[1] * relative[1] + relative[2] * relative[2] + relative[3] * relative[3])
 		end
 		
@@ -512,4 +533,5 @@ _export = {
 	getNearbyObjects = getNearbyObjects,
 	isGhost = isGhost,
 	getBoxyPolygons = getBoxyPolygons,
+	mapObjTypes = mapObjTypes,
 }

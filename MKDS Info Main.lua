@@ -8,8 +8,8 @@
 local config = {
 	-- display options
 	defaultScale = 0.8, -- big = zoom out
-	drawOnLeftSide = true,
-	useIntegerScale = false, -- Is BizHawk configured to scale by integer scale factors only? (Getting this automatically is too hard. EmuHawk default is false.)
+	drawOnLeftSide = true, -- if the window is wide, keep on-screend stuff on the left edge
+	useIntegerScale = false, -- Is EmuHawk configured to only scale the game by integer scale factors? (Pulling this info automatically is too hard. False is EmuHawk default.)
 	increaseRenderDistance = false, -- true to draw triangels far away (laggy)
 	renderAllTriangles = false,
 	objectRenderDistance = 600,
@@ -139,12 +139,11 @@ local function NewMyData()
 	n.positionDelta = 0
 	n.angleDelta = 0
 	n.driftAngleDelta = 0
-	n.pos = Vector.zero()
+	n.basePos = Vector.zero()
 	n.facingAngle = 0
 	n.driftAngle = 0
 	n.movementDirection = Vector.zero()
 	n.movementTarget = Vector.zero()
-	n.hitboxType = "spherical"
 	return n
 end
 local myData = NewMyData()
@@ -256,13 +255,16 @@ local function getRacerBasicData(ptr, previousData)
 		return newData
 	end
 
-	newData.posForObjects = read_pos(ptr + 0x1b8)
-	newData.posForItems = read_pos(ptr + 0x1d8)
-	newData.radius = memory.read_s32_le(ptr + 0x1d0)
+	-- Should I rename this, so all Lua tables have the same name for for-triangle position?
+	newData.basePos = read_pos(ptr + 0x80)
+	newData.objPos = read_pos(ptr + 0x1b8)
+	newData.itemPos = read_pos(ptr + 0x1d8)
+	newData.objRadius = memory.read_s32_le(ptr + 0x1d0)
+	newData.itemRadius = newData.objRadius
 	newData.movementDirection = read_pos(ptr + 0x68)
 	if previousData ~= nil then
-		newData.real2dSpeed = math.sqrt((previousData.pos[3] - newData.pos[3]) ^ 2 + (previousData.pos[1] - newData.pos[1]) ^ 2)
-		newData.actualPosDelta = Vector.subtract(newData.pos, previousData.pos)
+		newData.real2dSpeed = math.sqrt((previousData.basePos[3] - newData.basePos[3]) ^ 2 + (previousData.basePos[1] - newData.basePos[1]) ^ 2)
+		newData.actualPosDelta = Vector.subtract(newData.basePos, previousData.basePos)
 		newData.facingDelta = newData.facingAngle - previousData.facingAngle
 		newData.driftDelta = newData.driftAngle - previousData.driftAngle
 	end
@@ -283,10 +285,10 @@ local function getRacerDetails(ptr, previousData, isSameFrame)
 	--allData[0] = memory.read_u8(ptr)
 
 	-- Read positions and speed
-	newData.pos = get_pos(allData, 0x80)
-	newData.posForObjects = get_pos(allData, 0x1B8) -- also used for collision
-	newData.preMovementPosForObjects = get_pos(allData, 0x1C4) -- this too is used for collision
-	newData.posForItems = get_pos(allData, 0x1D8) -- also for racer-racer collision
+	newData.basePos = get_pos(allData, 0x80)
+	newData.objPos = get_pos(allData, 0x1B8) -- also used for collision
+	newData.preMovementObjPos = get_pos(allData, 0x1C4) -- this too is used for collision
+	newData.itemPos = get_pos(allData, 0x1D8) -- also for racer-racer collision
 	newData.speed = get_s32(allData, 0x2A8)
 	newData.basePosDelta = get_pos(allData, 0xA4)
 	newData.boostAll = allData[0x238]
@@ -320,8 +322,8 @@ local function getRacerDetails(ptr, previousData, isSameFrame)
 		newData.facingDelta = previousData.facingDelta
 		newData.driftDelta = previousData.driftDelta
 	else
-		newData.real2dSpeed = math.sqrt((previousData.pos[3] - newData.pos[3]) ^ 2 + (previousData.pos[1] - newData.pos[1]) ^ 2)
-		newData.actualPosDelta = Vector.subtract(newData.pos, previousData.pos)
+		newData.real2dSpeed = math.sqrt((previousData.basePos[3] - newData.basePos[3]) ^ 2 + (previousData.basePos[1] - newData.basePos[1]) ^ 2)
+		newData.actualPosDelta = Vector.subtract(newData.basePos, previousData.basePos)
 		newData.facingDelta = newData.facingAngle - previousData.facingAngle
 		newData.driftDelta = newData.driftAngle - previousData.driftAngle
 	end
@@ -330,8 +332,10 @@ local function getRacerDetails(ptr, previousData, isSameFrame)
 	-- surface/collision stuffs
 	newData.surfaceNormalVector = get_pos(allData, 0x244)
 	newData.grip = get_s32(allData, 0x240)
-	newData.radius = get_s32(allData, 0x1d0)
+	newData.objRadius = get_s32(allData, 0x1d0)
 	--newData.radiusMult = get_s32(allData, 0x4c8)
+	newData.statsPtr = get_u32(allData, 0x2cc)
+	newData.itemRadius = newData.objRadius
 
 	-- status things
 	newData.framesInAir = get_s32(allData, 0x380)
@@ -357,7 +361,6 @@ local function getRacerDetails(ptr, previousData, isSameFrame)
 	
 	-- ?	
 	--newData.smsm = get_s32(allData, 0x39c)
-	--newData.statsPtr = get_u32(allData, 0x2cc)
 	newData.maxSpeedFraction = get_s32(allData, 0x2a0)
 	newData.snqcr = get_s32(allData, 0x3a8)
 	--newData.ffms = get_s32(allData, 0xd4)
@@ -537,7 +540,7 @@ local function _mkdsinfo_run_data(isSameFrame)
 		local ghostExists = racerCount >= 2 and Objects.isGhost(ptrRacerData + 0x5a8)
 		if ghostExists then
 			myData.ghost = allRacers[1]
-			myData.ghost.pos = read_pos(myData.ghost.ptr + 0x80)
+			myData.ghost.basePos = read_pos(myData.ghost.ptr + 0x80)
 		else
 			myData.ghost = nil
 		end
@@ -666,10 +669,10 @@ local function drawInfoBottomScreen(data)
 
 	-- Display position
 	dt(data.air .. " (" .. data.framesInAir .. ")")
-	dt(posVecToStr(data.pos, "X, Z, Y  : "))
+	dt(posVecToStr(data.basePos, "X, Z, Y  : "))
 	dt(posVecToStr(data.actualPosDelta, "Delta    : "))
-	local bm = Vector.add(Vector.subtract(data.pos, data.actualPosDelta), data.basePosDelta)
-	local pod = Vector.subtract(data.posForObjects, bm)
+	local bm = Vector.add(Vector.subtract(data.basePos, data.actualPosDelta), data.basePosDelta)
+	local pod = Vector.subtract(data.objPos, bm)
 	dt(posVecToStr(data.collisionPush, "Collision: "))
 	dt(posVecToStr(pod, "Hitbox   : "))
 	endSection()
@@ -720,8 +723,8 @@ local function drawInfoBottomScreen(data)
 
 	-- Ghost comparison
 	if data.ghost then
-		local distX = data.pos[1] - data.ghost.pos[1]
-		local distZ = data.pos[3] - data.ghost.pos[3]
+		local distX = data.basePos[1] - data.ghost.basePos[1]
+		local distZ = data.basePos[3] - data.ghost.basePos[3]
 		local dist = math.sqrt(distX * distX + distZ * distZ)
 		dt(f("Distance from ghost (2D): %.0f", dist))
 		endSection()
@@ -730,8 +733,8 @@ local function drawInfoBottomScreen(data)
 	-- Point comparison
 	if form.comparisonPoint ~= nil then
 		local delta = {
-			data.pos[1] - form.comparisonPoint[1],
-			data.pos[3] - form.comparisonPoint[3]
+			data.basePos[1] - form.comparisonPoint[1],
+			data.basePos[3] - form.comparisonPoint[3]
 		}
 		local dist = math.floor(math.sqrt(delta[1] * delta[1] + delta[2] * delta[2]))
 		local angleRad = math.atan(delta[1], delta[2])
@@ -743,7 +746,7 @@ local function drawInfoBottomScreen(data)
 	-- Nearest object
 	if data.nearestObject ~= nil then
 		local obj = data.nearestObject
-		dt(f("Object distance: %.0f (%s, %s)", obj.distance, obj.hitboxType, obj.type))
+		dt(f("Object distance: %.0f (%s, %s)", obj.distance, obj.hitboxType, obj.type or obj.itemName))
 		if obj.distanceComponents ~= nil then
 			if obj.innerDistComps ~= nil then
 				dt(posVecToStr(obj.distanceComponents, "outer: "))
@@ -772,15 +775,6 @@ local function drawInfoBottomScreen(data)
 	end
 	endSection()
 	
-	-- tmep?
-	--dt(rawQuaternion(data.snQuaternion, "snq: "))
-	--dt(rawQuaternion(data.snqTarget, "trg: "))
-	--dt(data.maxSpeedFraction)
-	--dt(data.snqcr)
-	--dt("4de: " .. data.f4de)
-	--dt("smsm: " .. data.smsm)
-	--dt(data.radius)
-	
 	-- Display checkpoints
 	if data.checkpoint ~= nil then
 		if (data.spawnPoint > -1) then dt("Spawn Point: " .. data.spawnPoint) end
@@ -807,7 +801,7 @@ local function drawInfoBottomScreen(data)
 	--	dt("Lap: " .. time(data.lap_f))
 	--end
 end
-local itemNames = {
+local roulleteItemNames = { -- The IDs according to the item roullete.
 	"red shell", "banana", "fake item box",
 	"mushroom", "triple mushroom", "bomb",
 	"blue shell", "lightning", "triple greens",
@@ -816,10 +810,10 @@ local itemNames = {
 	"boo", "invalid17", "invalid18",
 	"none",
 }
-itemNames[0] = "green shell"
+roulleteItemNames[0] = "green shell"
 local function drawItemInfo(data)
 	if data.roulleteItem ~= 19 then
-		gui.text(6, 84, itemNames[data.roulleteItem])
+		gui.text(6, 84, roulleteItemNames[data.roulleteItem])
 		if data.roulleteState == 1 then
 			local ttpi = 60 - data.roulleteTimer
 			if ttpi <= 0 then
@@ -891,7 +885,6 @@ local function updateDrawingRegions(camera)
 		h = 192 * gameScale,
 	}
 	if layout ~= "Horizontal" then
-		iView.y = iView.y + (192 + gap) * gameScale
 		if config.drawOnLeftSide == true then
 			-- People who use wide window (black space to the side of game screen) tell me they prefer info to be displayed on the left rather than over the bottom screen.
 			iView.x = 0
@@ -899,6 +892,7 @@ local function updateDrawingRegions(camera)
 				colView.x = colView.w
 			end
 		end
+		iView.y = iView.y + (192 + gap) * gameScale
 	else
 		iView.x = iView.x + 256 * gameScale
 	end
@@ -912,6 +906,21 @@ updateDrawingRegions(mainCamera)
 
 Graphics.setPerspective(mainCamera, { 0, 0x1000, 0 })
 
+local function updateViewportBasic(viewport)
+	if viewport.racerId ~= -1 then
+		viewport.location = allRacers[viewport.racerId].objPos
+		viewport.obj = nil
+	elseif viewport.objFocus ~= nil and nearbyObjects ~= nil then
+		for i = 1, #nearbyObjects do
+			if nearbyObjects[i].ptr == viewport.objFocus then
+				viewport.location = nearbyObjects[i].objPos
+				viewport.obj = nearbyObjects[i]
+				return
+			end
+		end
+		viewport.obj = nil
+	end
+end
 local function updateViewport(viewport)
 	if viewport == mainCamera then
 		-- Camera view overrides other viewpoint settings
@@ -926,7 +935,7 @@ local function updateViewport(viewport)
 		elseif mainCamera.frozen == true then
 			mainCamera.location = mainCamera.freezePoint
 		else
-			mainCamera.location = allRacers[viewport.racerId].posForObjects
+			updateViewportBasic(viewport)
 		end
 	elseif viewport.frozen ~= true then	
 		if viewport.perspectiveId == -6 then
@@ -936,7 +945,7 @@ local function updateViewport(viewport)
 			viewport.fovH = ch.fovH
 			Graphics.setPerspective(viewport, ch.direction)
 		else
-			viewport.location = allRacers[viewport.racerId].posForObjects
+			updateViewportBasic(viewport)
 		end
 	end
 end
@@ -1090,9 +1099,78 @@ local function watchRightClick()
 	_watchUpdate()
 end
 
+local function shouldFocusOnObject(obj)
+	if obj.isMapObject then
+		return obj.hitboxType ~= "no hitbox"
+	elseif obj.isItem then
+		-- TODO: What type of item is it?
+		return true
+	end
+end
+local function nextObj(beginId, direction)
+	if nearbyObjects == nil then error("no objects list") end
+	local endId = #nearbyObjects
+	if direction == -1 then endId = 1 end
+	for i = beginId, endId, direction do
+		local obj = nearbyObjects[i]
+		if shouldFocusOnObject(obj) then
+			return obj
+		end
+	end
+	return nil
+end
+local function focusClick(viewport, plusminus)
+	if nearbyObjects == nil then error("no objects list") end
+	if viewport.racerId ~= -1 then
+		viewport.racerId = viewport.racerId + plusminus
+		if viewport.racerId == -1 or viewport.racerId == #allRacers + 1 then
+			local b = 1
+			if plusminus == -1 then b = #nearbyObjects end
+			local obj = nextObj(b, plusminus)
+			viewport.racerId = -1
+			if obj ~= nil then
+				viewport.objFocus = obj.ptr
+				forms.settext(viewport.focusLabel, obj.itemName or Objects.mapObjTypes[obj.typeId] or string.format("unk (%i)", obj.typeId))
+				redraw()
+				return
+			end
+			viewport.racerId = #allRacers - 1
+		end
+	else
+		local obj = nil
+		if #nearbyObjects ~= 0 then
+			-- Does our current focus object exist (nearby)?
+			local currentId = nil
+			for i = 1, #nearbyObjects do
+				if nearbyObjects[i].ptr == viewport.objFocus then
+					currentId = i
+				end
+			end
+			if currentId == nil then
+				-- No.
+				currentId = 0
+				if plusminus < 0 then currentId = #nearbyObjects + 1 end
+			end
+			obj = nextObj(currentId + plusminus, plusminus)
+		end
+		if obj ~= nil then
+			viewport.objFocus = obj.ptr
+			forms.settext(viewport.focusLabel, obj.itemName or Objects.mapObjTypes[obj.typeId] or string.format("unk (%i)", obj.typeId))
+			redraw()
+			return
+		else
+			viewport.objFocus = nil
+			viewport.racerId = 0
+			if plusminus < 0 then viewport.racerId = #allRacers end
+		end
+	end
+	forms.settext(viewport.focusLabel, string.format("racer %i", viewport.racerId))
+	redraw()
+end
+
 local function setComparisonPointClick()
 	if form.comparisonPoint == nil then
-		local pos = myData.pos
+		local pos = myData.basePos
 		form.comparisonPoint = { pos[1], pos[2], pos[3] }
 		forms.settext(form.setComparisonPoint, "Clear comparison point")
 	else
@@ -1290,7 +1368,7 @@ local function _changePerspective(cam)
 			cam.fovH = camData.fovH
 			Graphics.setPerspective(cam, camData.direction)
 		else
-			cam.location = myData.posForObjects
+			cam.location = myData.objPos
 		end
 		redraw()
 	end
@@ -1306,7 +1384,7 @@ local function changePerspectiveLeft(cam)
 	if id >= 0 then
 		-- find next nearby triangle ID
 		local racer = allRacers[cam.racerId]
-		local tris = KCL.getNearbyTriangles(racer.posForObjects)
+		local tris = KCL.getNearbyTriangles(racer.objPos)
 		local nextId = 0
 		for i = 1, #tris do
 			local ti = tris[i].id
@@ -1333,7 +1411,7 @@ local function changePerspectiveRight(cam)
 	if id >= 0 then
 		-- find next nearby triangle ID
 		local racer = allRacers[cam.racerId]
-		local tris = KCL.getNearbyTriangles(racer.posForObjects)
+		local tris = KCL.getNearbyTriangles(racer.objPos)
 		local nextId = 9999
 		for i = 1, #tris do
 			local ti = tris[i].id
@@ -1393,6 +1471,27 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 	)
 	local rightmost = forms.getproperty(temp, "Right") + 0
 	y = y + 26
+	temp = forms.label(
+		kclForm, "Focus on:",
+		x, y + 4
+	)
+	forms.setproperty(temp, "AutoSize", true)
+	temp = forms.button(
+		kclForm, "<", function() focusClick(viewport, -1) end,
+		forms.getproperty(temp, "Right") + labelMargin*2, y,
+		18, 23
+	)
+	viewport.focusLabel = forms.label(
+		kclForm, "racer 0",
+		forms.getproperty(temp, "Right") + labelMargin*2, y + 4
+	)
+	forms.setproperty(viewport.focusLabel, "AutoSize", true)
+	temp = forms.button(
+		kclForm, ">", function() focusClick(viewport, 1) end,
+		forms.getproperty(viewport.focusLabel, "Left") + 86, y,
+		18, 23
+	)
+	y = y + 26
 	temp = forms.checkbox(kclForm, "freeze location", x + 1, y)
 	forms.setproperty(temp, "AutoSize", true)
 	forms.addclick(temp, function()
@@ -1443,16 +1542,17 @@ local function makeNewKclView()
 	}
 	Graphics.setPerspective(viewport, {0, 0x1000, 0})
 
-	viewport.window = forms.newform(viewport.w * 2, viewport.h * 2 + 76, "KCL View", function ()
+	local hieghtOfControls = 98
+	viewport.window = forms.newform(viewport.w * 2, viewport.h * 2 + hieghtOfControls, "KCL View", function ()
 		MKDS_INFO_FORM_HANDLES[viewport.window] = nil
 		removeItem(viewports, viewport)
 	end)
 	MKDS_INFO_FORM_HANDLES[viewport.window] = true
-	local theBox = forms.pictureBox(viewport.window, 0, 76, viewport.w * 2, viewport.h * 2)
+	local theBox = forms.pictureBox(viewport.window, 0, hieghtOfControls, viewport.w * 2, viewport.h * 2)
 	viewport.box = theBox
 	forms.setproperty(viewport.window, "FormBorderStyle", "Sizable")
 	-- No resize events. Make a resize/refresh button? Click the box? Box is easy but would be a kinda hidden feature.
-	local temp = forms.label(viewport.window, "Click the box to resize it!", 15, viewport.h * 2 + 80)
+	local temp = forms.label(viewport.window, "Click the box to resize it!", 15, viewport.h * 2 + hieghtOfControls)
 	forms.setproperty(temp, "AutoSize", true)
 
 	viewport.boxWidthDelta = forms.getproperty(viewport.window, "Width") - forms.getproperty(theBox, "Width")
@@ -1545,7 +1645,7 @@ local function _mkdsinfo_setup()
 	form = {}
 	form.firstStateWithGhost = 0
 	form.comparisonPoint = nil
-	form.handle = forms.newform(305, 220, "MKDS Info Thingy", function()
+	form.handle = forms.newform(305, 238, "MKDS Info Thingy", function()
 		MKDS_INFO_FORM_HANDLES[form.handle] = nil
 		if my_script_id == script_id then
 			shouldExit = true

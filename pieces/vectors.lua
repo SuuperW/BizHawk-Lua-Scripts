@@ -101,6 +101,7 @@ end
 --- @param v2 [integer, integer, integer]
 --- @return [integer, integer, integer]
 local function subtract(v1, v2)
+	--if v1[1] == nil or v2[1] == nil then print(debug.traceback()) end
 	return {
 		v1[1] - v2[1],
 		v1[2] - v2[2],
