@@ -8,6 +8,8 @@
 local config = {
 	-- display options
 	defaultScale = 0.8, -- big = zoom out
+	drawOnLeftSide = true,
+	useIntegerScale = false, -- Is BizHawk configured to scale by integer scale factors only? (Getting this automatically is too hard. EmuHawk default is false.)
 	increaseRenderDistance = false, -- true to draw triangels far away (laggy)
 	renderAllTriangles = false,
 	objectRenderDistance = 600,
@@ -876,6 +878,7 @@ local function updateDrawingRegions(camera)
 		gameBaseHeight = 192
 	end
 	local gameScale = math.min(clientWidth / gameBaseWidth, clientHeight / gameBaseHeight)
+	if config.useIntegerScale then gameScale = math.floor(gameScale) end
 	local colView = {
 		w = 0.5 * 256 * gameScale,
 		h = 0.5 * 192 * gameScale,
@@ -889,10 +892,10 @@ local function updateDrawingRegions(camera)
 		h = 192 * gameScale,
 	}
 	if layout ~= "Horizontal" then
-		-- People who use wide window (black space to the side of game screen) tell me they prefer info to be displayed on the left rather than over the bottom screen.
-		iView.x = 0
 		iView.y = iView.y + (192 + gap) * gameScale
 		if config.drawOnLeftSide == true then
+			-- People who use wide window (black space to the side of game screen) tell me they prefer info to be displayed on the left rather than over the bottom screen.
+			iView.x = 0
 			if mainCamera.overlay == false then
 				colView.x = colView.w
 			end
