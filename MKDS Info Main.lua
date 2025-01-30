@@ -18,7 +18,6 @@ local config = {
 	showBottomScreenInfo = true,
 	-- behavior
 	alertOnRewindAfterBranch = true, -- BizHawk simply does not support nice seeking behavior, so we can't do it for you.
-	ancientStateInterval = 500, -- Workaround for BizHawk 2.10 bug that makes ancient states not work.
 	showBizHawkDumbnessWarning = true,
 
 	-- hacks: use these with caution as they can desync a movie or mess up state hisotry
@@ -1645,15 +1644,6 @@ local function main()
 	_mkdsinfo_setup()
 	while (not shouldExit) or (redrawSeek ~= nil) do
 		frame = emu.framecount()
-		-- BizHawk 2.10 bug: ancient states don't work!
-		if bizhawkVersion == 10 then
-			if (frame + 2) % config.ancientStateInterval == 0 then
-				tastudio.setmarker(frame + 2, "BizHawk bug workaround")
-			elseif tastudio.getmarker(frame + 2) == "BizHawk bug workaround" then
-				-- Insert/delete frame will move them around.
-				tastudio.removemarker(frame + 2)
-			end
-		end
 		
 		if not shouldExit then
 			if inRace() then
