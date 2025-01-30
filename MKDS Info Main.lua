@@ -15,7 +15,7 @@ local config = {
 	objectRenderDistance = 600,
 	showExactMovement = true, -- true: dispaly fixed-point values as integers (0-4096 for 0.0-1.0)
 	showAnglesAsDegrees = false,
-	showBottomScreenInfo = true,
+	showBottomScreenInfo = true, -- item roullete thing too
 	-- behavior
 	alertOnRewindAfterBranch = true, -- BizHawk simply does not support nice seeking behavior, so we can't do it for you.
 	showBizHawkDumbnessWarning = true,
@@ -992,7 +992,9 @@ local function _mkdsinfo_run_draw(isInRace)
 			drawViewport(viewports[i])
 		end
 	else
-		drawText(10, 10, "Not in a race.")
+		if config.showBottomScreenInfo then
+			drawText(10, 10, "Not in a race.")
+		end
 	end
 end
 -------------------------------------------------
