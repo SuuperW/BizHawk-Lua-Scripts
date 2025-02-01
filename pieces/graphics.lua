@@ -444,7 +444,7 @@ local function makeRacerHitboxes(allRacers, focusedRacer)
 		p = -1
 	end
 
-	if not isTT and focusedRacer ~= allRacers[0] then
+	if not isTT and focusedRacer ~= allRacers[0] and focusedRacer ~= nil and focusedRacer.basePos ~= nil then -- basePos: is it a racer, not mapobj/item?
 		local racer = focusedRacer
 		addToDrawingQue(p, { HITBOX, racer, "spherical", color })
 		lineFromVector(racer.objPos, racer.movementDirection, racer.objRadius, movementColor, 5)

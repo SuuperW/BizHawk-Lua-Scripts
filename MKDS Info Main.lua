@@ -72,6 +72,7 @@ readConfig()
 
 ---------------------------------------
 config.defaultScale = 0x1000 * config.defaultScale / client.getwindowsize() -- "windowsize" is the scale factor
+config.objectRenderDistance = config.objectRenderDistance + 0.0 -- Lua, please. Use floats for this.
 config.objectRenderDistance = config.objectRenderDistance * config.objectRenderDistance * 0x1000000
 ---------------------------------------
 
@@ -262,7 +263,7 @@ local function getRacerBasicData(ptr, previousData)
 	newData.objRadius = memory.read_s32_le(ptr + 0x1d0)
 	newData.itemRadius = newData.objRadius
 	newData.movementDirection = read_pos(ptr + 0x68)
-	if previousData ~= nil then
+	if previousData ~= nil and previousData.basePos ~= nil then
 		newData.real2dSpeed = math.sqrt((previousData.basePos[3] - newData.basePos[3]) ^ 2 + (previousData.basePos[1] - newData.basePos[1]) ^ 2)
 		newData.actualPosDelta = Vector.subtract(newData.basePos, previousData.basePos)
 		newData.facingDelta = newData.facingAngle - previousData.facingAngle
@@ -494,7 +495,8 @@ local function inRace()
 		return false
 	end
 	local currentCourseId = memory.read_u8(Memory.addrs.ptrCurrentCourse)
-	if currentCourseId ~= course.id or currentRacersPtr ~= course.racersPtr or frame - timer ~= course.frame then
+	if currentCourseId ~= course.id or currentRacersPtr ~= course.racersPtr or math.abs(frame - timer - course.frame) > 1 then
+		-- The timer update is on the boundary of frames (so we check +/- > 1)
 		course.id = currentCourseId
 		course.racersPtr = currentRacersPtr
 		course.frame = frame - timer
@@ -519,20 +521,43 @@ local function getInGameCameraData()
 		fovH = math.tan(cameraFoVV) * 0x1000,
 	}
 end
+local function getFakeCameraData(target, camera)
+	local focusPoint = target.basePos or target.objPos
+	local direction = target.movementDirection or target.velocity
+	if direction == nil or Vector.equals(direction, {0,0,0}) then
+		direction = { 0x1000, 0, 0 }
+	end
+	direction = Vector.normalize_float(direction)
+	if direction[2] > -0x380 then
+		direction[2] = -0x380
+		direction = Vector.normalize_float(direction)
+	end
+	local moveTo = Vector.add(focusPoint, Vector.multiply(direction, -70))
+	local newLocation = Vector.interpolate(camera.location, moveTo, 1) -- interp values < 1 are behaving very strange Idk, maybe my brain isn't working rn.
+	direction = Vector.subtract(newLocation, focusPoint)
+	direction = Vector.normalize_float(direction)
+	return {
+		location = newLocation,
+		direction = direction,
+		fovW = 3200,
+		fovH = 2385,
+	}
+end
 
 -- Main info function
 local function _mkdsinfo_run_data(isSameFrame)
 	myData = getRacerDetails(ptrRacerData + watchingId * 0x5a8, myData, isSameFrame)
 
 	racerCount = memory.read_s32_le(Memory.addrs.racerCount)
-	allRacers = {} -- needs new object so drawPackages can have multiple frames
+	local newRacers = {} -- needs new object so drawPackages can have multiple frames
 	for i = 0, racerCount - 1 do
 		if i ~= watchingId then
-			allRacers[i] = getRacerBasicData(ptrRacerData + i * 0x5a8, allRacers[i])
+			newRacers[i] = getRacerBasicData(ptrRacerData + i * 0x5a8, allRacers[i])
 		else
-			allRacers[i] = myData
+			newRacers[i] = myData
 		end
 	end
+	allRacers = newRacers
 	
 	if watchingId == 0 then
 		getCheckpointData(myData) -- This function only supports player.
@@ -908,12 +933,12 @@ Graphics.setPerspective(mainCamera, { 0, 0x1000, 0 })
 
 local function updateViewportBasic(viewport)
 	if viewport.racerId ~= -1 then
-		viewport.location = allRacers[viewport.racerId].objPos
+		if viewport.frozen ~= true then viewport.location = allRacers[viewport.racerId].objPos end
 		viewport.obj = nil
 	elseif viewport.objFocus ~= nil and nearbyObjects ~= nil then
 		for i = 1, #nearbyObjects do
 			if nearbyObjects[i].ptr == viewport.objFocus then
-				viewport.location = nearbyObjects[i].objPos
+				if viewport.frozen ~= true then viewport.location = nearbyObjects[i].objPos end
 				viewport.obj = nearbyObjects[i]
 				return
 			end
@@ -922,6 +947,7 @@ local function updateViewportBasic(viewport)
 	end
 end
 local function updateViewport(viewport)
+	updateViewportBasic(viewport)
 	if viewport == mainCamera then
 		-- Camera view overrides other viewpoint settings
 		if mainCamera.overlay == true then
@@ -934,18 +960,23 @@ local function updateViewport(viewport)
 			mainCamera.orthographic = false
 		elseif mainCamera.frozen == true then
 			mainCamera.location = mainCamera.freezePoint
-		else
-			updateViewportBasic(viewport)
 		end
 	elseif viewport.frozen ~= true then	
 		if viewport.perspectiveId == -6 then
-			local ch = gameCameraHisotry[3]
-			viewport.location = ch.location
-			viewport.fovW = ch.fovW
-			viewport.fovH = ch.fovH
-			Graphics.setPerspective(viewport, ch.direction)
-		else
-			updateViewportBasic(viewport)
+			local ch = nil
+			if viewport.racerId == 0 then
+				ch = gameCameraHisotry[3]
+			elseif viewport.obj ~= nil then
+				ch = getFakeCameraData(viewport.obj, viewport)
+			elseif viewport.racerId ~= -1 then
+				ch = getFakeCameraData(allRacers[viewport.racerId], viewport)
+			end
+			if ch ~= nil then -- Will be nil if focused on object that got destroyed
+				viewport.location = ch.location
+				viewport.fovW = ch.fovW
+				viewport.fovH = ch.fovH
+				Graphics.setPerspective(viewport, ch.direction)
+			end
 		end
 	end
 end

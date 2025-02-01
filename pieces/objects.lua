@@ -360,6 +360,7 @@ local function getItemDetails(obj)
 	obj.itemTypeId = memory.read_s32_le(ptr + 0x44)
 	obj.itemName = itemNames[obj.itemTypeId]
 	obj.itemPos = obj.objPos
+	obj.velocity = read_pos(ptr + 0x5C)
 	obj.hitboxType = "item"
 end
 local function getRacerObjDetails(obj)
@@ -415,6 +416,7 @@ end
 local function getNearbyObjects(racer, dist)
 	local maxCount = memory.read_u16_le(Memory.addrs.ptrObjStuff + 0x08)
 	local count = 0
+	local itemsThatAreObjs = {}
 
 	-- get basic info
 	local nearbyObjects = {}
@@ -444,8 +446,10 @@ local function getNearbyObjects(racer, dist)
 				elseif flags & FLAG_RACER ~= 0 then
 					if isGhost(objPtr) or objPtr == racer.ptr then
 						skip = true
-					end	
-				elseif flags & (FLAG_DYNAMIC | FLAG_ITEM) == 0 then
+					end
+				elseif flags & FLAG_ITEM ~= 0 then
+					itemsThatAreObjs[objPtr] = true
+				elseif flags & FLAG_DYNAMIC == 0 then
 					skip = true
 				end
 				if not skip then
@@ -473,6 +477,33 @@ local function getNearbyObjects(racer, dist)
 			
 			if count == maxCount then
 				break
+			end
+		end
+	end
+
+	-- items
+	local setsPtr = memory.read_u32_le(Memory.addrs.ptrItemSets)
+	for iSet = 0, 13 do
+		local sp = setsPtr + iSet*0x44
+		local setPtr = memory.read_u32_le(sp + 4)
+		local setCount = memory.read_u16_le(sp + 0x10)
+		for i = 0, setCount - 1 do
+			local itemObj = {
+				ptr = memory.read_u32_le(setPtr + i*4),
+				flags = FLAG_ITEM,
+			}
+			if itemsThatAreObjs[itemObj.ptr] == nil then
+				local itemFlags = memory.read_u32_le(itemObj.ptr + 0x74)
+				if itemFlags & 0x0080000 == 0 then -- Idk what these flags mean
+					-- others set were 0x0020080
+					itemObj.objPos = read_pos(itemObj.ptr + 0x50)
+					local dx = racer.itemPos[1] - itemObj.objPos[1]
+					local dz = racer.itemPos[3] - itemObj.objPos[3]
+					local d = dx * dx + dz * dz
+					if d <= dist then
+						nearbyObjects[#nearbyObjects + 1] = itemObj
+					end
+				end
 			end
 		end
 	end

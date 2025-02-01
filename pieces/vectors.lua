@@ -25,6 +25,7 @@ end
 -- _t: The output is truncated.
 -- _float: No rouding; may return values that MKDS cannot represent.
 local function normalize_float(v)
+	--if v == nil or type(v) == "number" or v[1] == nil then print(debug.traceback()) end
 	local m = math.sqrt(v[1] * v[1] + v[2] * v[2] + v[3] * v[3]) / 0x1000
 	return {
 		v[1] / m,
@@ -70,6 +71,7 @@ end
 --- @param s number
 --- @return [number, number, number]
 local function multiply(v, s)
+	--if v == nil or v[1] == nil then print(debug.traceback()) end
 	return {
 		v[1] * s,
 		v[2] * s,

@@ -24,6 +24,7 @@ local addrs = {
 	ptrVisibilityStuff = 0x217AE90 + ptrOffset,
 	cameraThing = 0x207AA24 + ptrOffset,
 	ptrBattleController = 0x0217b1dc + ptrOffset,
+	ptrItemSets = 0x27e00cc, -- versions?
 }
 ---------------------------------------
 -- These have the same address in E and U versions.
