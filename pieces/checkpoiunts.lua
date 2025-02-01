@@ -5,7 +5,7 @@ local checkpointSize = 0x24;
 local function getCheckpoints()
 	local ptrCheckData = memory.read_s32_le(Memory.addrs.ptrCheckData)
 	local totalcheckpoints = memory.read_u16_le(ptrCheckData + 0x48)
-	if totalcheckpoints == 0 then return {} end
+	if totalcheckpoints == 0 then return { count = 0 } end
 	local chkAddr = memory.read_u32_le(ptrCheckData + 0x44)
 
 	local checkpointData = memory.read_bytes_as_array(chkAddr + 1, totalcheckpoints * checkpointSize)

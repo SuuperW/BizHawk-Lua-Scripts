@@ -378,6 +378,7 @@ local function isGhost(objPtr)
 	return flags7c & 0x04 ~= 0
 end
 local function getObjectDetails(obj)
+	obj.basePos = obj.objPos
 	local flags = obj.flags
 	if flags & FLAG_MAPOBJ ~= 0 then
 		obj.isMapObject = true

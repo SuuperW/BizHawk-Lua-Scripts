@@ -137,6 +137,7 @@ local redrawSeek = nil
 -- Some stuff
 local function NewMyData()
 	local n = {}
+	n.isRacer = true
 	n.positionDelta = 0
 	n.angleDelta = 0
 	n.driftAngleDelta = 0

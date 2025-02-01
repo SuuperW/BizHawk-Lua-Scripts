@@ -444,7 +444,7 @@ local function makeRacerHitboxes(allRacers, focusedRacer)
 		p = -1
 	end
 
-	if not isTT and focusedRacer ~= allRacers[0] and focusedRacer ~= nil and focusedRacer.basePos ~= nil then -- basePos: is it a racer, not mapobj/item?
+	if not isTT and focusedRacer ~= allRacers[0] and focusedRacer ~= nil and focusedRacer.isRacer then
 		local racer = focusedRacer
 		addToDrawingQue(p, { HITBOX, racer, "spherical", color })
 		lineFromVector(racer.objPos, racer.movementDirection, racer.objRadius, movementColor, 5)
@@ -606,7 +606,7 @@ end
 
 local function makeCheckpointsQue(checkpoints, racer)
 	local function elevate(p)
-		return { p[1], racer.pos[2], p[2] }
+		return { p[1], racer.basePos[2], p[2] }
 	end
 	local function checkpointLine(c)
 		local color = 0xff11ff11
@@ -628,7 +628,7 @@ local function makeCheckpointsQue(checkpoints, racer)
 	end
 
 	-- the racer position
-	addToDrawingQue(1, { CIRCLE, racer.pos, 10, 0xffffffff, nil })
+	addToDrawingQue(1, { CIRCLE, racer.basePos, 10, 0xffffffff, nil })
 	-- can we do crosshairs?
 end
 
