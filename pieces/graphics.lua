@@ -605,8 +605,10 @@ local function makeObjectsQue(objects, racer)
 end
 
 local function makeCheckpointsQue(checkpoints, racer)
+	local pos = racer and racer.basePos
+	if pos == nil then pos = { 0, 0x100000, 0 } end
 	local function elevate(p)
-		return { p[1], racer.basePos[2], p[2] }
+		return { p[1], pos[2], p[2] }
 	end
 	local function checkpointLine(c)
 		local color = 0xff11ff11
@@ -628,7 +630,7 @@ local function makeCheckpointsQue(checkpoints, racer)
 	end
 
 	-- the racer position
-	addToDrawingQue(1, { CIRCLE, racer.basePos, 10, 0xffffffff, nil })
+	addToDrawingQue(1, { CIRCLE, pos, 10, 0xffffffff, nil })
 	-- can we do crosshairs?
 end
 
