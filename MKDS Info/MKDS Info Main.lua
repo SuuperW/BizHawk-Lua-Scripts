@@ -1063,8 +1063,6 @@ local function redraw(farRewind)
 			_mkdsinfo_run_draw(false)
 		end
 		return
-	else
-		print(bizhawkVersion, farRewind)
 	end
 
 	-- emu.yield() -- this throws an Exception in BizHawk's code
