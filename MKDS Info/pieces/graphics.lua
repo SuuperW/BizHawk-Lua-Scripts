@@ -290,7 +290,8 @@ local function processQue(camera)
 					color = color & 0x50ffffff
 				end			
 				local skipPolys = false
-				if hitboxType == "spherical" then
+				if hitboxType == "spherical" or (hitboxType == "cylindrical" and Vector.equals(camera.rotationVector, {0,-0x1000,0})) then
+					skipPolys = true
 					local point2D = point3Dto2D(object.objPos, camera)
 					local radius = scaleAtDistance(object.objPos, object.objRadius, camera)
 					if radius > cw then
@@ -317,12 +318,8 @@ local function processQue(camera)
 				elseif hitboxType == "item" then
 					local radius = scaleAtDistance(object.itemPos, object.itemRadius, camera)
 					makeCircle(point3Dto2D(object.itemPos, camera), radius, color, color)
-				elseif hitboxType == "cylindrical" then
-					-- A circle is only good for top-down view.
-					if Vector.equals(camera.rotationVector, {0,-0x1000,0}) then
-						skipPolys = true
-						makeCircle(point3Dto2D(object.objPos, camera), scaleAtDistance(v[3], object.objRadius, camera), color, color)
-					end
+				-- elseif hitboxType == "cylindrical" then
+					-- Drawn as either a circle (spherical above), or as polygons below
 				end
 				if not skipPolys and object.polygons ~= nil and #object.polygons ~= 0 then
 					local fill = color
@@ -402,8 +399,8 @@ local function processQue(camera)
 				end
 			elseif v[1] == TEXT then
 				-- Coordinates for TEXT are in pixels.
-				if v[2][2] >= -ch and v[2][2] < ch then
-					if v[2][1] >= -cw and v[2][1] < cw then
+				if v[2][2] >= 0 and v[2][2] < ch+cy then
+					if v[2][1] >= 0 and v[2][1] < cw+cx then
 						ops[opid] = { TEXT, v[2][1], v[2][2], v[3] }
 						opid = opid + 1
 					end
