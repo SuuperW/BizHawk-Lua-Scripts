@@ -1581,6 +1581,7 @@ local function makeNewKclView()
 	local theBox = forms.pictureBox(viewport.window, 0, hieghtOfControls, viewport.w * 2, viewport.h * 2)
 	viewport.box = theBox
 	forms.setproperty(viewport.window, "FormBorderStyle", "Sizable")
+	forms.setproperty(viewport.window, "MaximizeBox", "True")
 	-- No resize events. Make a resize/refresh button? Click the box? Box is easy but would be a kinda hidden feature.
 	local temp = forms.label(viewport.window, "Click the box to resize it!", 15, viewport.h * 2 + hieghtOfControls)
 	forms.setproperty(temp, "AutoSize", true)
