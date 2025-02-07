@@ -1485,6 +1485,16 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 		forms.getproperty(temp, "Right") + labelMargin, y,
 		23, 23
 	)
+	temp = forms.checkbox(kclForm, "freeze location", forms.getproperty(temp, "Right") + labelMargin, y + 4)
+	forms.setproperty(temp, "AutoSize", true)
+	forms.addclick(temp, function()
+		viewport.frozen = not viewport.frozen
+		viewport.freezePoint = viewport.location
+		if not viewport.frozen then
+			redraw()
+		end
+	end)
+
 	y = y + 26
 	temp = forms.label(
 		kclForm, "Perspective:",
@@ -1503,7 +1513,7 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 	forms.setproperty(viewport.perspectiveLabel, "AutoSize", true)
 	temp = forms.button(
 		kclForm, ">", function() changePerspectiveRight(viewport) end,
-		forms.getproperty(viewport.perspectiveLabel, "Right") + 22, y,
+		forms.getproperty(viewport.perspectiveLabel, "Right") + 38, y,
 		18, 23
 	)
 	local rightmost = forms.getproperty(temp, "Right") + 0
@@ -1525,19 +1535,9 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 	forms.setproperty(viewport.focusLabel, "AutoSize", true)
 	temp = forms.button(
 		kclForm, ">", function() focusClick(viewport, 1) end,
-		forms.getproperty(viewport.focusLabel, "Left") + 86, y,
+		forms.getproperty(viewport.focusLabel, "Left") + 102, y,
 		18, 23
 	)
-	y = y + 26
-	temp = forms.checkbox(kclForm, "freeze location", x + 1, y)
-	forms.setproperty(temp, "AutoSize", true)
-	forms.addclick(temp, function()
-		viewport.frozen = not viewport.frozen
-		viewport.freezePoint = viewport.location
-		if not viewport.frozen then
-			redraw()
-		end
-	end)
 
 	-- what is drawn
 	y = baseY
@@ -1579,7 +1579,7 @@ local function makeNewKclView()
 	}
 	Graphics.setPerspective(viewport, {0, 0x1000, 0})
 
-	local hieghtOfControls = 98
+	local hieghtOfControls = 82
 	viewport.window = forms.newform(viewport.w * 2, viewport.h * 2 + hieghtOfControls, "KCL View", function ()
 		MKDS_INFO_FORM_HANDLES[viewport.window] = nil
 		removeItem(viewports, viewport)
@@ -1691,12 +1691,12 @@ local function _mkdsinfo_setup()
 	MKDS_INFO_FORM_HANDLES = {}
 	
 	local noKclHeight = 142
-	local yesKclHeight = 238
+	local yesKclHeight = 222
 
 	form = {}
 	form.firstStateWithGhost = 0
 	form.comparisonPoint = nil
-	form.handle = forms.newform(305, noKclHeight, "MKDS Info Thingy", function()
+	form.handle = forms.newform(322, noKclHeight, "MKDS Info Thingy", function()
 		MKDS_INFO_FORM_HANDLES[form.handle] = nil
 		if my_script_id == script_id then
 			shouldExit = true
@@ -1712,7 +1712,7 @@ local function _mkdsinfo_setup()
 
 	-- Fake ghost
 	forms.setproperty(form.handle, "FormBorderStyle", "Sizable")
-	form.recordPositionButton = forms.button(form.handle, "Record fake ghost", recordPosition, 310, 20, 140, 23)
+	form.recordPositionButton = forms.button(form.handle, "Record fake ghost", recordPosition, 324, 20, 140, 23)
 	
 	local buttonMargin = 5
 	local labelMargin = 2
