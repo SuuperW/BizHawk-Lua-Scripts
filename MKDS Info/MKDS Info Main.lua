@@ -16,6 +16,8 @@ local config = {
 	showExactMovement = true, -- true: dispaly fixed-point values as integers (0-4096 for 0.0-1.0)
 	showAnglesAsDegrees = false,
 	showBottomScreenInfo = true, -- item roullete thing too
+	showWasbThings = false,
+	showRawObjectPositionDelta = false,
 	-- behavior
 	alertOnRewindAfterBranch = true, -- BizHawk simply does not support nice seeking behavior, so we can't do it for you.
 	showBizHawkDumbnessWarning = true,
@@ -755,8 +757,11 @@ local function drawInfoBottomScreen(data)
 	endSection()
 	
 	-- Wall assist
-	dt(rawQuaternion(data.snQuaternion, "Real:   "))
-	dt(rawQuaternion(data.snqTarget,    "Target: "))
+	if config.showWasbThings then
+		dt(rawQuaternion(data.snQuaternion, "Real:   "))
+		dt(rawQuaternion(data.snqTarget,    "Target: "))
+		endSection()
+	end
 
 	-- Ghost comparison
 	if data.ghost then
@@ -783,9 +788,10 @@ local function drawInfoBottomScreen(data)
 	-- Nearest object
 	if data.nearestObject ~= nil then
 		local obj = data.nearestObject
-		dt(posVecToStr(Vector.subtract(data.objPos, obj.objPos), "pd: "))
-		dt(obj.height)
 		dt(f("Object distance: %.0f (%s, %s)", obj.distance, obj.hitboxType, obj.type or obj.itemName))
+		if config.showRawObjectPositionDelta then
+			dt(posVecToStr(Vector.subtract(obj.objPos, data.objPos), "raw: "))
+		end
 		if obj.distanceComponents ~= nil then
 			if obj.innerDistComps ~= nil then
 				dt(posVecToStr(obj.distanceComponents, "outer: "))
