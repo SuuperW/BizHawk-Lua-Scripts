@@ -153,6 +153,7 @@ local allRacers = {}
 local racerCount = 0
 
 local raceData = {}
+local fakeGhostData = {}
 
 local form = {}
 local watchingId = 0
@@ -603,7 +604,14 @@ local function _mkdsinfo_run_data(isSameFrame)
 	if form.ghostInputs ~= nil then
 		ensureGhostInputs(form)
 	end
-	lastFrame = frame
+	local fakeGhostFrame = memory.read_s32_le(ptrRaceTimers + 4)
+	if form.recordingFakeGhost then
+		fakeGhostData[fakeGhostFrame] = myData
+	end
+	if fakeGhostData[fakeGhostFrame] ~= nil then
+		myData.ghost = fakeGhostData[fakeGhostFrame]
+		allRacers[racerCount] = myData.ghost
+	end
 	
 	if config.giveGhostShrooms then
 		local itemPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo)
@@ -615,6 +623,7 @@ local function _mkdsinfo_run_data(isSameFrame)
 	-- Data not tied to a racer
 	raceData.framesMod8 = memory.read_s32_le(ptrRaceTimers + 0xC)
 	raceData.coinsBeingCollected = memory.read_s16_le(ptrMissionInfo + 0x8)
+	lastFrame = frame
 
 	local drawingPackage = {
 		allRacers = allRacers,
@@ -772,6 +781,8 @@ local function drawInfoBottomScreen(data)
 	-- Nearest object
 	if data.nearestObject ~= nil then
 		local obj = data.nearestObject
+		dt(posVecToStr(Vector.subtract(data.objPos, obj.objPos), "pd: "))
+		dt(obj.height)
 		dt(f("Object distance: %.0f (%s, %s)", obj.distance, obj.hitboxType, obj.type or obj.itemName))
 		if obj.distanceComponents ~= nil then
 			if obj.innerDistComps ~= nil then
@@ -1630,6 +1641,16 @@ local function makeNewKclView()
 	drawViewport(viewport)
 end
 
+local function recordPosition()
+	form.recordingFakeGhost = not form.recordingFakeGhost
+	if form.recordingFakeGhost then
+		fakeGhostData = {}
+		forms.settext(form.recordPositionButton, "Stop recording")
+	else
+		forms.settext(form.recordPositionButton, "Record fake ghost")
+	end
+end
+
 local bizHawkEventIds = {}
 if MKDS_INFO_FORM_HANDLES == nil then MKDS_INFO_FORM_HANDLES = {} end
 local function _mkdsinfo_close()
@@ -1688,6 +1709,10 @@ local function _mkdsinfo_setup()
 		end
 	end)
 	MKDS_INFO_FORM_HANDLES[form.handle] = true
+
+	-- Fake ghost
+	forms.setproperty(form.handle, "FormBorderStyle", "Sizable")
+	form.recordPositionButton = forms.button(form.handle, "Record fake ghost", recordPosition, 310, 20, 140, 23)
 	
 	local buttonMargin = 5
 	local labelMargin = 2
