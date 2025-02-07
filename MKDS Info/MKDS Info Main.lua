@@ -1345,10 +1345,6 @@ local function drawUnpausedClick()
 	end
 end
 
-local function kclClick()
-	mainCamera.active = not mainCamera.active
-	redraw()
-end
 local function zoomInClick(camera)
 	camera = camera or mainCamera
 	camera.scale = camera.scale * 0.8
@@ -1694,10 +1690,13 @@ local function _mkdsinfo_setup()
 	end
 	MKDS_INFO_FORM_HANDLES = {}
 	
+	local noKclHeight = 142
+	local yesKclHeight = 238
+
 	form = {}
 	form.firstStateWithGhost = 0
 	form.comparisonPoint = nil
-	form.handle = forms.newform(305, 238, "MKDS Info Thingy", function()
+	form.handle = forms.newform(305, noKclHeight, "MKDS Info Thingy", function()
 		MKDS_INFO_FORM_HANDLES[form.handle] = nil
 		if my_script_id == script_id then
 			shouldExit = true
@@ -1709,6 +1708,7 @@ local function _mkdsinfo_setup()
 		end
 	end)
 	MKDS_INFO_FORM_HANDLES[form.handle] = true
+	local borderHeight = forms.getproperty(form.handle, "Height") + 0 - noKclHeight
 
 	-- Fake ghost
 	forms.setproperty(form.handle, "FormBorderStyle", "Sizable")
@@ -1768,15 +1768,21 @@ local function _mkdsinfo_setup()
 	)
 
 	-- Collision view
-	--temp = forms.checkbox(kclForm, "freeze location", x + 1, y)
-	--forms.addclick(temp, function() viewport.frozen = not viewport.frozen end)
 	y = y + 28
 	temp = forms.label(form.handle, "3D viewing", 10, y + 3)
 	forms.setproperty(temp, "AutoSize", true)
 	y = y + 19
 	temp = forms.checkbox(form.handle, "draw over screen", 10, y + 3)
 	forms.setproperty(temp, "AutoSize", true)
-	forms.addclick(temp, kclClick)
+	forms.addclick(temp, function()
+		mainCamera.active = not mainCamera.active
+		if mainCamera.active then
+			forms.setproperty(form.handle, "Height", yesKclHeight + borderHeight)
+		else
+			forms.setproperty(form.handle, "Height", noKclHeight + borderHeight)
+		end
+		redraw()
+	end)
 	form.delayCheckbox = forms.checkbox(form.handle, "delay", forms.getproperty(temp, "Right") + labelMargin, y + 3)
 	forms.setproperty(form.delayCheckbox, "AutoSize", true)
 	forms.addclick(form.delayCheckbox, function() mainCamera.useDelay = not mainCamera.useDelay; redraw() end)
