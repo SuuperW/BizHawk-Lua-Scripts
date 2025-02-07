@@ -48,33 +48,33 @@ local function writeConfig(exclude)
 end
 local function readConfig()
 	local configFile = io.open("MKDS_Info_Config.txt", "r")
+	local valuesRead = {}
 	if configFile == nil then
 		writeConfig({})
-		return
-	end
-
-	local keysRead = {}
-	for line in configFile:lines() do
-		local index = string.find(line, " ")
-		local name = string.sub(line, 0, index - 1)
-		local value = string.sub(line, index + 1)
-		if value == "true" then value = true
-		elseif value == "false" then value = false
-		else value = tonumber(value)
+		valuesRead = config -- the default config
+	else
+		local keysRead = {}
+		for line in configFile:lines() do
+			local index = string.find(line, " ")
+			local name = string.sub(line, 0, index - 1)
+			local value = string.sub(line, index + 1)
+			if value == "true" then value = true
+			elseif value == "false" then value = false
+			else value = tonumber(value)
+			end
+			valuesRead[name] = value
+			keysRead[name] = true
 		end
-		config[name] = value
-		keysRead[name] = true
+		io.close(configFile)
+		writeConfig(keysRead)
 	end
-	writeConfig(keysRead)
-	io.close(configFile)
-end
-readConfig()
 
----------------------------------------
-config.defaultScale = 0x1000 * config.defaultScale / client.getwindowsize() -- "windowsize" is the scale factor
-config.objectRenderDistance = config.objectRenderDistance + 0.0 -- Lua, please. Use floats for this.
-config.objectRenderDistance = config.objectRenderDistance * config.objectRenderDistance * 0x1000000
----------------------------------------
+	valuesRead.defaultScale = 0x1000 * valuesRead.defaultScale / client.getwindowsize() -- "windowsize" is the scale factor
+	valuesRead.objectRenderDistance = valuesRead.objectRenderDistance + 0.0 -- Lua, please. Use floats for this.
+	valuesRead.objectRenderDistance = valuesRead.objectRenderDistance * 0x1000
+	return valuesRead
+end
+config = readConfig()
 
 local bizhawkVersion = client.getversion()
 if string.sub(bizhawkVersion, 0, 3) == "2.9" then
@@ -638,6 +638,8 @@ local function _mkdsinfo_run_data(isSameFrame)
 		gameCameraHisotry[1] = gameCameraHisotry[2]
 		gameCameraHisotry[2] = gameCameraHisotry[3]
 		gameCameraHisotry[3] = getInGameCameraData()
+	else
+		drawingPackages[1] = drawingPackage
 	end
 end
 ---------------------------------------
@@ -1848,6 +1850,16 @@ gui.cleartext()
 
 if tastudio.engaged() then
 	bizHawkEventIds[#bizHawkEventIds + 1] = tastudio.onbranchload(branchLoadHandler)
+end
+
+-- GLOBAL
+function mkdsireload()
+	config = readConfig()
+	for i = 1, #viewports do
+		viewports[i].renderAllTriangles = config.renderAllTriangles
+	end
+	updateDrawingRegions(mainCamera)
+	redraw()
 end
 
 main()

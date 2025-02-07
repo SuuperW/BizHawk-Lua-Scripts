@@ -418,6 +418,7 @@ local function getNearbyObjects(racer, dist)
 	local maxCount = memory.read_u16_le(Memory.addrs.ptrObjStuff + 0x08)
 	local count = 0
 	local itemsThatAreObjs = {}
+	local distdist = dist * dist
 
 	-- get basic info
 	local nearbyObjects = {}
@@ -464,7 +465,7 @@ local function getNearbyObjects(racer, dist)
 					local dx = racerPos[1] - obj.objPos[1]
 					local dz = racerPos[3] - obj.objPos[3]
 					local d = dx * dx + dz * dz
-					if d <= dist then
+					if d <= distdist then
 						nearbyObjects[#nearbyObjects + 1] = obj
 					else
 						if (obj.typeId == 209 and d <= 9e13) or (obj.typeId == 11 and d < 1.2e13) then
@@ -510,7 +511,6 @@ local function getNearbyObjects(racer, dist)
 	end
 	
 	-- get details for nearby objects
-	local nearest = nil
 	for i = 1, #nearbyObjects do
 		local obj = nearbyObjects[i]
 
@@ -551,13 +551,21 @@ local function getNearbyObjects(racer, dist)
 			local relative = Vector.subtract(racer.objPos, obj.objPos)
 			obj.distance = math.sqrt(relative[1] * relative[1] + relative[2] * relative[2] + relative[3] * relative[3])
 		end
-		
-		if nearest == nil or obj.distance < nearest.distance then
-			nearest = obj
+	end
+
+	local realNearby = {}
+	local nearest = nil
+	for i = 1, #nearbyObjects do
+		local obj = nearbyObjects[i]
+		if obj.distance <= dist then
+			realNearby[#realNearby+1] = obj
+			if nearest == nil or obj.distance < nearest.distance then
+				nearest = obj
+			end
 		end
 	end
 
-	return { nearbyObjects, nearest }
+	return { realNearby, nearest }
 end
 
 _export = {
