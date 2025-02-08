@@ -551,9 +551,15 @@ end
 
 -- Main info function
 local function _mkdsinfo_run_data(isSameFrame)
-	myData = getRacerDetails(ptrRacerData + watchingId * 0x5a8, myData, isSameFrame)
-
 	racerCount = memory.read_s32_le(Memory.addrs.racerCount)
+	local fakeGhostFrame = memory.read_s32_le(ptrRaceTimers + 4)
+	local watchingFakeGhost = watchingId == racerCount
+	if watchingFakeGhost then
+		myData = fakeGhostData[fakeGhostFrame]
+	else
+		myData = getRacerDetails(ptrRacerData + watchingId * 0x5a8, myData, isSameFrame)
+	end
+
 	local newRacers = {} -- needs new object so drawPackages can have multiple frames
 	for i = 0, racerCount - 1 do
 		if i ~= watchingId then
@@ -571,11 +577,7 @@ local function _mkdsinfo_run_data(isSameFrame)
 		if ghostExists then
 			myData.ghost = allRacers[1]
 			myData.ghost.basePos = read_pos(myData.ghost.ptr + 0x80)
-		else
-			myData.ghost = nil
 		end
-	else
-		myData.ghost = nil
 	end
 
 	if config.enableCameraFocusHack then
@@ -599,28 +601,31 @@ local function _mkdsinfo_run_data(isSameFrame)
 		memory.write_u8(Memory.addrs.cameraThing, value)
 	end
 
-	local o = Objects.getNearbyObjects(myData, config.objectRenderDistance)
-	nearbyObjects = o[1]
-	myData.nearestObject = o[2]
-
-	-- Ghost handling
-	if form.ghostInputs ~= nil then
-		ensureGhostInputs(form)
-	end
-	local fakeGhostFrame = memory.read_s32_le(ptrRaceTimers + 4)
-	if form.recordingFakeGhost then
-		fakeGhostData[fakeGhostFrame] = myData
-	end
 	if fakeGhostData[fakeGhostFrame] ~= nil then
-		myData.ghost = fakeGhostData[fakeGhostFrame]
-		allRacers[racerCount] = myData.ghost
+		allRacers[racerCount] = fakeGhostData[fakeGhostFrame]
 	end
-	
-	if config.giveGhostShrooms then
-		local itemPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo)
-		itemPtr = itemPtr + 0x210 -- ghost
-		memory.write_u8(itemPtr + 0x4c, 5) -- mushroom
-		memory.write_u8(itemPtr + 0x54, 3) -- count
+	if not watchingFakeGhost then
+		local o = Objects.getNearbyObjects(myData, config.objectRenderDistance)
+		nearbyObjects = o[1]
+		myData.nearestObject = o[2]
+
+		-- Ghost handling
+		if form.ghostInputs ~= nil then
+			ensureGhostInputs(form)
+		end
+		if form.recordingFakeGhost then
+			fakeGhostData[fakeGhostFrame] = myData
+		end
+		if fakeGhostData[fakeGhostFrame] ~= nil then
+			myData.ghost = fakeGhostData[fakeGhostFrame]
+		end
+		
+		if config.giveGhostShrooms then
+			local itemPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo)
+			itemPtr = itemPtr + 0x210 -- ghost
+			memory.write_u8(itemPtr + 0x4c, 5) -- mushroom
+			memory.write_u8(itemPtr + 0x54, 3) -- count
+		end
 	end
 
 	-- Data not tied to a racer
@@ -656,6 +661,10 @@ end
 
 local function drawInfoBottomScreen(data)
 	gui.use_surface("client")
+	if data == nil then
+		drawText(5, 5, "No data.")
+		return
+	end
 	
 	local lineHeight = 15 -- there's no font size option!?
 	local sectionMargin = 8
@@ -856,6 +865,8 @@ local roulleteItemNames = { -- The IDs according to the item roullete.
 }
 roulleteItemNames[0] = "green shell"
 local function drawItemInfo(data)
+	if data == nil then return end
+
 	if data.roulleteItem ~= 19 then
 		gui.text(6, 84, roulleteItemNames[data.roulleteItem])
 		if data.roulleteState == 1 then
@@ -953,7 +964,11 @@ Graphics.setPerspective(mainCamera, { 0, 0x1000, 0 })
 
 local function updateViewportBasic(viewport)
 	if viewport.racerId ~= -1 then
-		if viewport.frozen ~= true then viewport.location = allRacers[viewport.racerId].objPos end
+		if viewport.frozen ~= true then
+			local racer = allRacers[viewport.racerId]
+			-- will be nil if we are watching the fake ghost but moved to a frame with no fake ghost data
+			if racer ~= nil then viewport.location = racer.objPos end
+		end
 		viewport.obj = nil
 	elseif viewport.objFocus ~= nil and nearbyObjects ~= nil then
 		for i = 1, #nearbyObjects do
@@ -1136,13 +1151,13 @@ end
 local function watchLeftClick()
 	watchingId = watchingId - 1
 	if watchingId == -1 then
-		watchingId = memory.read_s32_le(Memory.addrs.racerCount) - 1
+		watchingId = #allRacers
 	end
 	_watchUpdate()
 end
 local function watchRightClick()
 	watchingId = watchingId + 1
-	if watchingId >= memory.read_s32_le(Memory.addrs.racerCount) then
+	if watchingId > #allRacers then
 		watchingId = 0
 	end
 	_watchUpdate()
