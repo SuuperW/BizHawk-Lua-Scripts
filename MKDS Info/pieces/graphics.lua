@@ -29,7 +29,7 @@ local function fixLine(x1, y1, x2, y2)
 	end
 	-- If we cut out the other sides, that would lead to polygons not drawing correctly.
 	-- Because if we zoom in, all lines would be fully outside the bounds and so get cut out.
-	return { x1 = x1, y1 = y1, x2 = x2, y2 = y2 }
+	return { x1, y1, x2, y2 }
 end
 
 local function scaleAtDistance(point, size, camera)
@@ -258,13 +258,17 @@ local function processQue(camera)
 				local nextId = (j % #points) + 1
 				local line = fixLine(points[j][1], points[j][2], points[nextId][1], points[nextId][2])
 				if line ~= nil then
-					if #fp == 0 or line.x1 ~= fp[#fp][1] or line.y1 ~= fp[#fp][2] then
-						fp[#fp + 1] = { math.floor(line.x1 * cw + cx + 0.5), math.floor(line.y1 * ch + cy + 0.5) }
+					if #fp == 0 or line[1] ~= fp[#fp][1] or line[2] ~= fp[#fp][2] then
+						fp[#fp + 1] = { line[1], line[2] }
 					end
-					if line.x2 ~= fp[1][1] or line.y2 ~= fp[1][2] then
-						fp[#fp + 1] = { math.floor(line.x2 * cw + cx + 0.5), math.floor(line.y2 * ch + cy + 0.5) }
+					if line[3] ~= fp[1][1] or line[4] ~= fp[1][2] then
+						fp[#fp + 1] = { line[3], line[4] }
 					end
 				end
+			end
+			-- Transform points to screen pixels
+			for i = 1, #fp do
+				fp[i] = { math.floor(fp[i][1] * cw + cx + 0.5), math.floor(fp[i][2] * ch + cy + 0.5) }
 			end
 			
 			if #fp ~= 0 then
@@ -347,8 +351,8 @@ local function processQue(camera)
 					if points ~= nil then
 						ops[opid] = {
 							LINE,
-							points.x1 * cw + cx, points.y1 * ch + cy,
-							points.x2 * cw + cx, points.y2 * ch + cy,
+							points[1] * cw + cx, points[2] * ch + cy,
+							points[3] * cw + cx, points[4] * ch + cy,
 							v[4],
 						}
 						opid = opid + 1

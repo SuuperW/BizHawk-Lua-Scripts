@@ -416,7 +416,7 @@ local function getCourseCollisionData()
 			b = 0x1000 * 1000
 			tri.ignore = true
 		end
-		local c = Vector.multiply(tri.slope[1], b)
+		local c = Vector.truncate(Vector.multiply(tri.slope[1], b))
 		tri.vertex[3] = Vector.add(tri.vertex[1], c)
 		a = Vector.dotProduct_float(vectors[tri.inVectorId], tri.slope[2])
 		b = tri.triangleSize / a
@@ -425,7 +425,7 @@ local function getCourseCollisionData()
 			b = 0x1000 * 1000
 			tri.ignore = true
 		end
-		c = Vector.multiply(tri.slope[2], b)
+		c = Vector.truncate(Vector.multiply(tri.slope[2], b))
 		tri.vertex[2] = Vector.add(tri.vertex[1], c)
 	end
 	
