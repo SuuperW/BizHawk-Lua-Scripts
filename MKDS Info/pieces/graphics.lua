@@ -295,10 +295,11 @@ local function processQue(camera)
 				end			
 				local skipPolys = false
 				if hitboxType == "spherical" or (hitboxType == "cylindrical" and Vector.equals(camera.rotationVector, {0,-0x1000,0})) then
-					skipPolys = true
+					skipPolys = hitboxType == "cylindrical"
 					local point2D = point3Dto2D(object.objPos, camera)
 					local radius = scaleAtDistance(object.objPos, object.objRadius, camera)
 					if radius > cw then
+						makeCircle(point2D, radius, color, (((color >> 24) & 0xff ~= 0xff) and color) or nil)
 						-- Small circles, so we can zoom in on racers to see the center
 						local smallsize = 300
 						radius = scaleAtDistance(object.objPos, smallsize, camera)
@@ -334,7 +335,7 @@ local function processQue(camera)
 					if object.cylinder2 == true or hitboxType == "cylindrical" then
 						fill = nil
 					end
-					if hitboxType == "boxy" then
+					if hitboxType == "boxy" or object.typeId == 207 then
 						color = 0xffffffff
 					end
 					-- We separate fill and outline draws because BizHawk's draw system has issues.

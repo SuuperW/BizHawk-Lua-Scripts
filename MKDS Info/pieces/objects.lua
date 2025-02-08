@@ -468,8 +468,9 @@ local function getNearbyObjects(racer, dist)
 					if d <= distdist then
 						nearbyObjects[#nearbyObjects + 1] = obj
 					else
-						if (obj.typeId == 209 and d <= 9e13) or (obj.typeId == 11 and d < 1.2e13) then
+						if (obj.typeId == 209 and d <= 9e13) or (obj.typeId == 11 and d < 1.2e13) or (obj.typeId == 205 and d < 1e13) then
 							-- obj 209: rotating bridge in Bowser's Castle: it's huge
+							-- obj 205: TTC clock hands
 							-- obj 11: stop signage, they are huge boxes
 							nearbyObjects[#nearbyObjects + 1] = obj
 						end
