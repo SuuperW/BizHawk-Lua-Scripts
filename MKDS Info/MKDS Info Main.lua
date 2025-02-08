@@ -18,6 +18,7 @@ local config = {
 	showBottomScreenInfo = true, -- item roullete thing too
 	showWasbThings = false,
 	showRawObjectPositionDelta = false,
+	backfaceCulling = true, -- Do not show triangles that are facing away from the camera
 	-- behavior
 	alertOnRewindAfterBranch = true, -- BizHawk simply does not support nice seeking behavior, so we can't do it for you.
 	showBizHawkDumbnessWarning = true,
@@ -886,6 +887,7 @@ local mainCamera = {
 	useDelay = true,
 	active = false,
 	renderAllTriangles = config.renderAllTriangles,
+	backfaceCulling = config.backfaceCulling,
 }
 local viewports = {}
 
@@ -1582,6 +1584,7 @@ local function makeNewKclView()
 		drawObjects = true,
 		active = true,
 		renderAllTriangles = config.renderAllTriangles,
+		backfaceCulling = config.backfaceCulling,
 	}
 	Graphics.setPerspective(viewport, {0, 0x1000, 0})
 
@@ -1859,9 +1862,14 @@ end
 -- GLOBAL
 function mkdsireload()
 	config = readConfig()
+
+	mainCamera.renderAllTriangles = config.renderAllTriangles
+	mainCamera.backfaceCulling = config.backfaceCulling
 	for i = 1, #viewports do
 		viewports[i].renderAllTriangles = config.renderAllTriangles
+		viewports[i].backfaceCulling = config.backfaceCulling
 	end
+
 	updateDrawingRegions(mainCamera)
 	redraw()
 end

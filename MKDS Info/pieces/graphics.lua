@@ -452,7 +452,19 @@ local function makeRacerHitboxes(allRacers, focusedRacer)
 	end
 end	
 
-local function drawTriangle(tri, d, racer, dotSize)
+local function drawTriangle(tri, d, racer, dotSize, viewport)
+	if tri.skip then return end
+	if viewport ~= nil and viewport.backfaceCulling == true then
+		if viewport.orthographic then
+			if Vector.dotProduct_float(tri.surfaceNormal, viewport.rotationVector) > 0 then return end
+		else
+			if Vector.dotProduct_float(
+				tri.surfaceNormal,
+				Vector.subtract(tri.vertex[1], viewport.location)
+			) > 0 then return end
+		end
+	end 
+
 	-- fill
 	local touchData = d and d.touch
 	if touchData == nil then
@@ -509,9 +521,7 @@ end
 local function makeKclQue(viewport, focusObject, allTriangles, textonly)
 	if allTriangles ~= nil and textonly ~= true then
 		for i = 1, #allTriangles do
-			if not allTriangles[i].skip then
-				drawTriangle(allTriangles[i], nil, focusObject, 0)
-			end
+			drawTriangle(allTriangles[i], nil, focusObject, 0, viewport)
 		end
 	end
 	if focusObject == nil then return end
@@ -528,8 +538,8 @@ local function makeKclQue(viewport, focusObject, allTriangles, textonly)
 		if viewport.w > 128 then dotSize = 1.5 end
 		for i = 1, #touchData.all do
 			local d = touchData.all[i]
-			if not d.triangle.skip and d.touch.canTouch then
-				drawTriangle(d.triangle, d, focusObject, dotSize)
+			if d.touch.canTouch then
+				drawTriangle(d.triangle, d, focusObject, dotSize, viewport)
 			end
 		end
 	end
