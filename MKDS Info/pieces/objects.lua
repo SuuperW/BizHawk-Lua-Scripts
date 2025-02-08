@@ -243,7 +243,7 @@ local function getDetailsForBoxyObject(obj)
 		obj.sizes = read_pos(obj.ptr + 0x58)
 	end
 	obj.dynPos = obj.objPos
-	obj.polygons = getBoxyPolygons(obj.objPos, obj.orientation, obj.sizes, obj.backSizes)
+	obj.polygons = function() return getBoxyPolygons(obj.objPos, obj.orientation, obj.sizes, obj.backSizes) end
 end
 local function getDetailsForCylinder2Object(obj, isBumper)
 	obj.cylinder2 = true
@@ -258,7 +258,7 @@ local function getDetailsForCylinder2Object(obj, isBumper)
 		obj.bHeight = obj.height
 	end
 	
-	obj.polygons = getCylinderPolygons(obj.objPos, obj.orientation, obj.objRadius, obj.height, obj.bHeight)
+	obj.polygons = function() return getCylinderPolygons(obj.objPos, obj.orientation, obj.objRadius, obj.height, obj.bHeight) end
 end
 local function getDetailsForDynamicBoxyObject(obj)
 	obj.sizes = read_pos(obj.ptr + 0x100)
@@ -304,7 +304,7 @@ local function getMapObjDetails(obj)
 			hitboxType = "spherical"
 		elseif hbType == 2 then
 			hitboxType = "cylindrical"
-			obj.polygons = getCylinderPolygons(obj.objPos, obj.orientation, obj.objRadius, obj.height, obj.height)
+			obj.polygons = function() return getCylinderPolygons(obj.objPos, obj.orientation, obj.objRadius, obj.height, obj.height) end
 		elseif hbType == 3 then
 			hitboxType = "cylinder2" -- I can't find an object in game that directly uses this.
 			getDetailsForCylinder2Object(obj, false)

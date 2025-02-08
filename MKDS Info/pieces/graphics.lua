@@ -325,22 +325,26 @@ local function processQue(camera)
 				-- elseif hitboxType == "cylindrical" then
 					-- Drawn as either a circle (spherical above), or as polygons below
 				end
-				if not skipPolys and object.polygons ~= nil and #object.polygons ~= 0 then
+				if not skipPolys and object.polygons ~= nil then
+					if type(object.polygons) == "function" then
+						object.polygons = object.polygons()
+						if #object.polygons == 0 then error("Got no polygons.") end
+					end
 					local fill = color
 					if object.cylinder2 == true or hitboxType == "cylindrical" then
 						fill = nil
 					end
 					if hitboxType == "boxy" then
 						color = 0xffffffff
-						-- We separate fill and outline draws because BizHawk's draw system has issues.
+					end
+					-- We separate fill and outline draws because BizHawk's draw system has issues.
+					if fill ~= nil then
 						for j = 1, #object.polygons do
 							makePolygon(object.polygons[j], nil, fill)
-							makePolygon(object.polygons[j], color, nil)
 						end
-					else
-						for j = 1, #object.polygons do
-							makePolygon(object.polygons[j], color, fill)
-						end
+					end
+					for j = 1, #object.polygons do
+						makePolygon(object.polygons[j], color, nil)
 					end
 				end
 			elseif v[1] == LINE then
