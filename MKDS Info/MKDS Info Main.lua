@@ -176,20 +176,20 @@ end
 -- General stuffs -------------------------------
 local satr = 2 * math.pi / 0x10000
 
-function contains(list, x)
+local function contains(list, x)
 	for _, v in ipairs(list) do
 		if v == x then return true end
 	end
 	return false
 end
-function copyTableShallow(table)
+local function copyTableShallow(table)
 	local new = {}
 	for k, v in pairs(table) do
 		new[k] = v
 	end
 	return new
 end
-function removeItem(_table, item)
+local function removeItem(_table, item)
 	for i, v in ipairs(_table) do
 		if v == item then
 			table.remove(_table, i)
