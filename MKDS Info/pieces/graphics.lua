@@ -683,9 +683,22 @@ local function processPackage(camera, package)
 	elseif camera.isPrimary then
 		-- We always show the text for nearest+touched triangles.
 		makeKclQue(camera, thing, (camera.renderAllTriangles and package.allTriangles) or nil, true)
+		if camera.drawRacers == true then
+			makeRacerHitboxes(package.allRacers, thing)
+		end
 	end
 
-	return processQue(camera)
+	-- Hacky: Player hitbox is transparent on the main screen when in 3D view (.overlay == true)
+	-- But if we are using renderHitboxesWhenFakeGhost, .overlay may be false.
+	if camera.drawRacers == true then -- .drawRacers means renderHitboxesWhenFakeGhost is on and fake ghost exists.
+		local temp = camera.overlay
+		camera.overlay = true
+		local que = processQue(camera)
+		camera.overlay = temp
+		return que
+	else
+		return processQue(camera)
+	end
 end
 local function drawClient(camera, package)
 	local operations = processPackage(camera, package)

@@ -19,6 +19,7 @@ local config = {
 	showWasbThings = false,
 	showRawObjectPositionDelta = false,
 	backfaceCulling = true, -- Do not show triangles that are facing away from the camera
+	renderHitboxesWhenFakeGhost = false, -- Render your hitbox and that of the fake ghost, when a fake ghost exists, on the main screen, when the main camera is off.
 	-- behavior
 	alertOnRewindAfterBranch = true, -- BizHawk simply does not support nice seeking behavior, so we can't do it for you.
 	showBizHawkDumbnessWarning = true,
@@ -157,6 +158,7 @@ local racerCount = 0
 
 local raceData = {}
 local fakeGhostData = {}
+local fakeGhostExists = false
 
 local form = {}
 local watchingId = 0
@@ -604,6 +606,7 @@ local function _mkdsinfo_run_data(isSameFrame)
 	if fakeGhostData[fakeGhostFrame] ~= nil then
 		allRacers[racerCount] = fakeGhostData[fakeGhostFrame]
 	end
+	fakeGhostExists = false
 	if not watchingFakeGhost then
 		local o = Objects.getNearbyObjects(myData, config.objectRenderDistance)
 		nearbyObjects = o[1]
@@ -618,6 +621,7 @@ local function _mkdsinfo_run_data(isSameFrame)
 		end
 		if fakeGhostData[fakeGhostFrame] ~= nil then
 			myData.ghost = fakeGhostData[fakeGhostFrame]
+			fakeGhostExists = true
 		end
 		
 		if config.giveGhostShrooms then
@@ -626,6 +630,8 @@ local function _mkdsinfo_run_data(isSameFrame)
 			memory.write_u8(itemPtr + 0x4c, 5) -- mushroom
 			memory.write_u8(itemPtr + 0x54, 3) -- count
 		end
+	else
+		fakeGhostExists = true
 	end
 
 	-- Data not tied to a racer
@@ -884,22 +890,33 @@ local function drawItemInfo(data)
 end
 
 -- Collision drawing ----------------------------
-local mainCamera = {
-	orthographic = true,
-	scale = config.defaultScale,
-	perspectiveId = -5,
-	overlay = false,
-	drawKcl = true,
-	drawObjects = true,
-	drawCheckpoints = false,
-	racerId = 0,
-	drawText = function(x, y, s, c) gui.text(x + iView.x, iView.y - y, s, c) end,
-	isPrimary = true,
-	useDelay = true,
-	active = false,
-	renderAllTriangles = config.renderAllTriangles,
-	backfaceCulling = config.backfaceCulling,
-}
+local function makeDefaultViewport()
+	return {
+		orthographic = true,
+		scale = config.defaultScale,
+		w = 200,
+		h = 150,
+		x = 200,
+		y = 150,
+		perspectiveId = -5, -- top down
+		overlay = false,
+		drawCheckpoints = false,
+		racerId = 0,
+		drawKcl = true,
+		drawObjects = true,
+		active = true,
+		renderAllTriangles = config.renderAllTriangles,
+		backfaceCulling = config.backfaceCulling,
+	}
+end
+local mainCamera = makeDefaultViewport()
+mainCamera.drawText = function(x, y, s, c) gui.text(x + iView.x, iView.y - y, s, c) end
+mainCamera.isPrimary = true
+mainCamera.useDelay = true
+mainCamera.active = false
+mainCamera.renderHitboxesWhenFakeGhost = config.renderHitboxesWhenFakeGhost
+mainCamera.drawRacers = false
+
 local viewports = {}
 
 local originalPadding = nil
@@ -985,7 +1002,8 @@ local function updateViewport(viewport)
 	updateViewportBasic(viewport)
 	if viewport == mainCamera then
 		-- Camera view overrides other viewpoint settings
-		if mainCamera.overlay == true then
+		mainCamera.drawRacers = mainCamera.active == false and mainCamera.renderHitboxesWhenFakeGhost == true and fakeGhostExists == true
+		if mainCamera.overlay == true or mainCamera.drawRacers then
 			local ch = gameCameraHisotry[1]
 			if ch.location == nil then ch = gameCameraHisotry[3] end
 			mainCamera.location = ch.location
@@ -1584,23 +1602,7 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 end
 
 local function makeNewKclView()
-	local viewport = {
-		orthographic = true,
-		scale = config.defaultScale,
-		w = 200,
-		h = 150,
-		x = 200,
-		y = 150,
-		perspectiveId = -5, -- top down
-		overlay = false,
-		drawCheckpoints = false,
-		racerId = 0,
-		drawKcl = true,
-		drawObjects = true,
-		active = true,
-		renderAllTriangles = config.renderAllTriangles,
-		backfaceCulling = config.backfaceCulling,
-	}
+	local viewport = makeDefaultViewport()
 	Graphics.setPerspective(viewport, {0, 0x1000, 0})
 
 	local hieghtOfControls = 82
@@ -1880,6 +1882,7 @@ function mkdsireload()
 
 	mainCamera.renderAllTriangles = config.renderAllTriangles
 	mainCamera.backfaceCulling = config.backfaceCulling
+	mainCamera.renderHitboxesWhenFakeGhost = config.renderHitboxesWhenFakeGhost
 	for i = 1, #viewports do
 		viewports[i].renderAllTriangles = config.renderAllTriangles
 		viewports[i].backfaceCulling = config.backfaceCulling
