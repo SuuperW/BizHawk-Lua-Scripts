@@ -13,6 +13,13 @@ local function mul_fx(a, b)
 	return a * b // 0x1000
 end
 
+local SOUND_TRIGGER = 4
+local FLOOR_NO_RACERS = 13
+local WALL_NO_RACERS = 14
+local EDGE_WALL = 16
+local RECALCULATE_ROUTE = 22
+
+local skippableTypes = (1 << SOUND_TRIGGER) | (1 << FLOOR_NO_RACERS) | (1 << WALL_NO_RACERS) | (1 << RECALCULATE_ROUTE)
 
 local function _getNearbyTriangles(pos)
 	if someCourseData == nil or triangles == nil then error("nil course data") end
@@ -299,19 +306,35 @@ local function getCollisionDataForRacer(toucher)
 	local nearestWall = nil
 	local nearestFloor = nil
 	local maxPushOut = nil
+	local lowestTriangle = nil
+	local touchedEdgeWall = false
+	local touchedFloor = false
+	local skipEdgeWalls = false
+	local skipFloorVerticals = false
 	for i = 1, #nearby do
 		local touch = getTouchDataForSurface(toucher, nearby[i])
 		if touch.canTouch == true then
 			local triangle = nearby[i]
-			data[#data + 1] = {
+			local thisData  = {
 				triangle = triangle,
 				touch = touch,
 			}
-
-			if touch.push and not triangle.isWall and (maxPushOut == nil or touch.pushOutDistance > data[maxPushOut].touch.pushOutDistance) then
-				maxPushOut = #data
+			data[#data + 1] = thisData
+			if touch.touching then
+				touchList[#touchList + 1] = thisData
 			end
 
+			if touch.push then
+				if triangle.isFloor and (maxPushOut == nil or touch.pushOutDistance > data[maxPushOut].touch.pushOutDistance) then
+					maxPushOut = #data
+				end
+				if lowestTriangle == nil or touch.centerToTriangle[2] < lowestTriangle.touch.centerToTriangle[2] then
+					lowestTriangle = thisData
+				end
+				touchedEdgeWall = touchedEdgeWall or triangle.collisionType == EDGE_WALL
+				touchedFloor = touchedFloor or triangle.isFloor
+			end
+			
 			-- find nearest wall/floor
 			if triangle.isWall and not touch.push and (nearestWall == nil or touch.distance < data[nearestWall].touch.distance) then
 				nearestWall = #data
@@ -319,14 +342,30 @@ local function getCollisionDataForRacer(toucher)
 			if triangle.isFloor and not touch.push and (nearestFloor == nil or touch.distance < data[nearestFloor].touch.distance) then
 				nearestFloor = #data
 			end
-
-			if touch.touching then
-				touchList[#touchList + 1] = data[#data]
-			end
 		end
 	end
 	
-	if maxPushOut ~= nil then
+	if touchedEdgeWall and touchedFloor then
+		local v = lowestTriangle.touch.centerToTriangle
+		if v[1] * v[1] + v[3] * v[3] <= v[2] * v[2] then
+			-- Not allowed to touch edge walls.
+			skipEdgeWalls = true
+			for i = 1, #touchList do
+				if touchList[i].triangle.collisionType == EDGE_WALL then
+					touchList[i].touch.skipByEdge = true
+				end
+			end
+		else
+			-- Not allowed to fully touch floors.
+			skipFloorVerticals = true
+			for i = 1, #touchList do
+				if touchList[i].triangle.isFloor then
+					touchList[i].touch.skipByEdge = true
+				end
+			end
+		end
+	end
+	if maxPushOut ~= nil and skipFloorVerticals == false then
 		data[maxPushOut].controlsSlope = true
 	end
 	
@@ -369,7 +408,7 @@ local function getCourseCollisionData()
 		triangles[i].isFloor = triangles[i].props & 0x1e34ef ~= 0
 		triangles[i].isOob = triangles[i].props & 0xC00 ~= 0
 
-		triangles[i].skip = triangles[i].isActuallyLine or triangles[i].collisionType == 4 or triangles[i].collisionType == 13 or triangles[i].collisionType == 22
+		triangles[i].skip = triangles[i].isActuallyLine or (1 << triangles[i].collisionType) & skippableTypes ~= 0
 	end
 		
 	local vectorsPtr = get_u32(someCourseData, 4)

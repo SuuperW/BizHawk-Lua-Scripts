@@ -483,6 +483,8 @@ local function drawTriangle(tri, d, racer, dotSize, viewport)
 				lineFromVector(racer.objPos, tri.surfaceNormal, racer.objRadius, 0xff00ff00, 5)
 			elseif d.isWall then
 				color = 0x20ffff22
+			elseif touchData.skipByEdge then
+				color = 0x30ffcc88
 			else
 				color = 0x50ffffff
 			end
@@ -584,10 +586,16 @@ local function makeKclQue(viewport, focusObject, allTriangles, textonly)
 			else
 				ps = string.format("n %.2f", d.touch.outwardMovement)
 			end
-		elseif d.touch.isInside then
-			ps = string.format("p %i", d.touch.pushOutDistance)
 		else
-			ps = string.format("p %.2f", d.touch.pushOutDistance)
+			local p = "p"
+			if d.touch.skipByEdge then
+				p = "edge"
+			end
+			if d.touch.isInside then
+				ps = string.format("%s %i", p, d.touch.pushOutDistance)
+			else
+				ps = string.format("%s %.2f", p, d.touch.pushOutDistance)
+			end
 		end
 		local str = string.format("%i: %s, %s", tri.id, stype, ps)
 		addToDrawingQue(99, { TEXT, { 2, y }, str })
