@@ -1,6 +1,7 @@
 -- Some useful things and some hacks, to be used manually in the Lua Console.
 
 function GetRacerPtr(id)
+	memory.usememorydomain("ARM9 System Bus")
 	local racer = memory.read_u32_le(0x0217ACF8)
 	return racer + id*0x5a8
 end
@@ -20,6 +21,7 @@ function MakeGhostCollidable()
 end
 
 function FinishRace()
+	memory.usememorydomain("ARM9 System Bus")
 	local ptr = memory.read_u32_le(0x021755FC)
 
 	-- End the race
@@ -59,6 +61,7 @@ function FinishRace()
 end
 
 function GiveItem(racer, item)
+	memory.usememorydomain("ARM9 System Bus")
 	local itemPtr = memory.read_s32_le(0x0217BC2C)
 	itemPtr = itemPtr + 0x210*racer
 	memory.write_u8(itemPtr + 0x4c, item)
