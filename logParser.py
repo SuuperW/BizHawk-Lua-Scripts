@@ -7,6 +7,13 @@
 
 import sys
 
+names_of_arm_registers = [
+	'r0', 'r1', 'r2', 'r3',
+	'r4', 'r5', 'r6', 'r7',
+	'r8', 'r9', 'r10', 'r11',
+	'r12', 'sp', 'lr', 'pc',
+]
+
 def index(string: str, search_for: str, start = None):
 	try:
 		return string.index(search_for, start)
@@ -38,6 +45,25 @@ def value_of_register(line: str, register_name: str):
 	register_index = line.lower().index(register_name.lower() + ':')
 	indx = register_index + 1 + len(register_name)
 	return int(line[indx:indx+8], 16)
+
+def count_in_range(register_range: str):
+	if '-' in register_range:
+		names = register_range.split('-')
+		start = names_of_arm_registers.index(names[0].lower())
+		end = names_of_arm_registers.index(names[0].lower())
+		return end - start + 1
+	else:
+		return 1
+def count_registers(string: str):
+	#{r4-r9,lr}
+	begin = string.index('{') + 1
+	end = string.index('}')
+	register_list = string[begin:end]
+	register_groups = register_list.split(',')
+	total = 0
+	for group in register_groups:
+		total += count_in_range(group)
+	return total
 
 class LogEntry:
 	input_string: str
@@ -132,9 +158,10 @@ class LogEntry:
 				raise Exception('Unknown opcode')
 			if self.inst_disasm[4] == 'b':
 				base_address += add
-			access_bits = int(log_string[11:19], 16) & 0x7fff
+			
+			count = count_registers(self.inst_disasm)
 			addresses = []
-			for _ in range(access_bits.bit_count()):
+			for _ in range(count):
 				addresses.append(base_address)
 				base_address += add
 			self.access_addresses = addresses
@@ -187,7 +214,7 @@ if __name__ == '__main__':
 	access = int(sys.argv[2], 16)
 	log = TraceLog(file_name)
 	
-	lines_found = log.find_access(access)
+	lines_found = log.find_read(access)
 	print(lines_found)
 	for line_number in lines_found:
 		print(log.log_entrys[line_number].input_string)
