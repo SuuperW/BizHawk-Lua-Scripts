@@ -269,42 +269,46 @@ local ptrMissionInfo = nil
 local gameCameraHisotry = {{},{},{}}
 local drawingPackages = {}
 
-local function getRacerBasicData(ptr, previousData)
+local function gerRacerRawData(ptr)
+	if ptr == 0 then
+		return nil
+	else
+		return memory.read_bytes_as_array(ptr + 1, 0x5a8 - 1)
+	end
+end
+local function getRacerBasicData(ptr)
 	local newData = NewMyData()
 	newData.ptr = ptr
 	if ptr == 0 then
 		return newData
 	end
 
-	-- Should I rename this, so all Lua tables have the same name for for-triangle position?
 	newData.basePos = read_pos(ptr + 0x80)
 	newData.objPos = read_pos(ptr + 0x1b8)
 	newData.itemPos = read_pos(ptr + 0x1d8)
 	newData.objRadius = memory.read_s32_le(ptr + 0x1d0)
 	newData.itemRadius = newData.objRadius
 	newData.movementDirection = read_pos(ptr + 0x68)
-	if previousData ~= nil and previousData.basePos ~= nil then
-		newData.real2dSpeed = math.sqrt((previousData.basePos[3] - newData.basePos[3]) ^ 2 + (previousData.basePos[1] - newData.basePos[1]) ^ 2)
-		newData.actualPosDelta = Vector.subtract(newData.basePos, previousData.basePos)
-		newData.facingDelta = newData.facingAngle - previousData.facingAngle
-		newData.driftDelta = newData.driftAngle - previousData.driftAngle
-	end
 
 	return newData
 end
-local function getRacerDetails(ptr, previousData, isSameFrame)
-	local newData = NewMyData()
-	newData.ptr = ptr
-	if ptr == 0 then
-		return newData
+local function getRacerBasicData2(raw)
+	newData = {}
+	newData.basePos = get_pos(raw, 0x80)
+	newData.objPos = get_pos(raw, 0x1b8)
+	newData.itemPos = get_pos(raw, 0x1d8)
+	newData.objRadius = get_s32(raw, 0x1d0)
+	newData.itemRadius = newData.objRadius
+	newData.movementDirection = get_pos(raw, 0x68)
+
+	return newData
+end
+local function getRacerDetails(allData, previousData, isSameFrame)
+	if allData == nil then
+		return NewMyData()
 	end
 
-	-- Optimization: Do only one BizHawk API call. Yes, this is a little faster.
-	-- Off-by-one shenanigans because Lua table indexes are 1-based by default.
-	-- Also things not in use are commented out.
-	local allData = memory.read_bytes_as_array(ptr + 1, 0x5a8 - 1)
-	--allData[0] = memory.read_u8(ptr)
-
+	local newData = {}
 	-- Read positions and speed
 	newData.basePos = get_pos(allData, 0x80)
 	newData.objPos = get_pos(allData, 0x1B8) -- also used for collision
@@ -400,7 +404,8 @@ local function getRacerDetails(ptr, previousData, isSameFrame)
 	
 	return newData
 end
-local function getCheckpointData(dataObj)	
+
+local function getCheckpointData(dataObj)
 	if ptrCheckNum == 0 then
 		return
 	end
@@ -570,31 +575,49 @@ local function _mkdsinfo_run_data(isSameFrame)
 	local fakeGhostFrame = memory.read_s32_le(ptrRaceTimers + 4)
 	local watchingFakeGhost = watchingId == racerCount
 	if watchingFakeGhost then
-		myData = fakeGhostData[fakeGhostFrame]
+		myData = getRacerDetails(fakeGhostData[fakeGhostFrame], myData, isSameFrame)
+		myData.rawData = fakeGhostData[fakeGhostFrame]
 	else
-		myData = getRacerDetails(ptrRacerData + watchingId * 0x5a8, myData, isSameFrame)
+		local raw = gerRacerRawData(ptrRacerData + watchingId * 0x5a8)
+		myData = getRacerDetails(raw, myData, isSameFrame)
+		myData.ptr = ptrRacerData + watchingId * 0x5a8
+		myData.rawData = raw
 	end
 
 	local newRacers = {} -- needs new object so drawPackages can have multiple frames
 	for i = 0, racerCount - 1 do
 		if i ~= watchingId then
-			newRacers[i] = getRacerBasicData(ptrRacerData + i * 0x5a8, allRacers[i])
+			newRacers[i] = getRacerBasicData(ptrRacerData + i * 0x5a8)
 		else
 			newRacers[i] = myData
 		end
 	end
-	allRacers = newRacers
 	
 	if watchingId == 0 then
 		getCheckpointData(myData) -- This function only supports player.
 
 		local ghostExists = racerCount >= 2 and Objects.isGhost(ptrRacerData + 0x5a8)
 		if ghostExists then
-			myData.ghost = allRacers[1]
+			myData.ghost = newRacers[1]
 			myData.ghost.basePos = read_pos(myData.ghost.ptr + 0x80)
 		end
 	end
 
+	local o = Objects.getNearbyObjects(myData, config.objectRenderDistance)
+	nearbyObjects = o[1]
+	myData.nearestObject = o[2]
+
+	-- Ghost handling
+	if form.ghostInputs ~= nil then
+		ensureGhostInputs(form)
+	end
+	if config.giveGhostShrooms then
+		local itemPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo)
+		itemPtr = itemPtr + 0x210 -- ghost
+		memory.write_u8(itemPtr + 0x4c, 5) -- mushroom
+		memory.write_u8(itemPtr + 0x54, 3) -- count
+	end
+	
 	if config.enableCameraFocusHack then
 		local raceThing = memory.read_u32_le(Memory.addrs.ptrSomeRaceData)
 		memory.write_u8(raceThing + 0x62, watchingId)
@@ -616,36 +639,24 @@ local function _mkdsinfo_run_data(isSameFrame)
 		memory.write_u8(Memory.addrs.cameraThing, value)
 	end
 
+	-- FAKE ghost
 	if fakeGhostData[fakeGhostFrame] ~= nil then
-		allRacers[racerCount] = fakeGhostData[fakeGhostFrame]
+		newRacers[racerCount] = getRacerBasicData2(fakeGhostData[fakeGhostFrame])
 	end
 	fakeGhostExists = false
 	if not watchingFakeGhost then
-		local o = Objects.getNearbyObjects(myData, config.objectRenderDistance)
-		nearbyObjects = o[1]
-		myData.nearestObject = o[2]
-
-		-- Ghost handling
-		if form.ghostInputs ~= nil then
-			ensureGhostInputs(form)
-		end
 		if form.recordingFakeGhost then
-			fakeGhostData[fakeGhostFrame] = myData
+			fakeGhostData[fakeGhostFrame] = myData.rawData
 		end
-		if fakeGhostData[fakeGhostFrame] ~= nil then
-			myData.ghost = fakeGhostData[fakeGhostFrame]
+		if newRacers[racerCount] ~= nil then
+			myData.ghost = newRacers[racerCount]
 			fakeGhostExists = true
 		end
 		
-		if config.giveGhostShrooms then
-			local itemPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo)
-			itemPtr = itemPtr + 0x210 -- ghost
-			memory.write_u8(itemPtr + 0x4c, 5) -- mushroom
-			memory.write_u8(itemPtr + 0x54, 3) -- count
-		end
 	else
 		fakeGhostExists = true
 	end
+	allRacers = newRacers
 
 	-- Data not tied to a racer
 	raceData.framesMod8 = memory.read_s32_le(ptrRaceTimers + 0xC)
@@ -1695,10 +1706,10 @@ local function recordPosition()
 	if form.recordingFakeGhost then
 		-- If we have an exact match, don't delete the whole thing.
 		local fakeGhostFrame = memory.read_s32_le(ptrRaceTimers + 4)
-		thisFrameFakeGhost = fakeGhostData[fakeGhostFrame]
-		if deepMatch(thisFrameFakeGhost, myData, 5) then
+		local ghost = fakeGhostData[fakeGhostFrame]
+		if ghost ~= nil and deepMatch(ghost, myData.rawData, 1) then
 			local count = #fakeGhostData
-			for i = thisFrameFakeGhost + 1, count do
+			for i = fakeGhostFrame + 1, count do
 				fakeGhostData[i] = nil
 			end
 		else
