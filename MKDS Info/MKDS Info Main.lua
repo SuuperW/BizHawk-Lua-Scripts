@@ -920,6 +920,7 @@ local function makeDefaultViewport()
 		active = true,
 		renderAllTriangles = config.renderAllTriangles,
 		backfaceCulling = config.backfaceCulling,
+		focusPreMovement = false,
 	}
 end
 local mainCamera = makeDefaultViewport()
@@ -997,7 +998,13 @@ local function updateViewportBasic(viewport)
 		if viewport.frozen ~= true then
 			local racer = allRacers[viewport.racerId]
 			-- will be nil if we are watching the fake ghost but moved to a frame with no fake ghost data
-			if racer ~= nil then viewport.location = racer.objPos end
+			if racer ~= nil then
+				if viewport.focusPreMovement then
+					viewport.location = racer.preMovementObjPos
+				else
+					viewport.location = racer.objPos
+				end
+			end
 		end
 		viewport.obj = nil
 	elseif viewport.objFocus ~= nil and nearbyObjects ~= nil then
@@ -1217,19 +1224,26 @@ end
 local function focusClick(viewport, plusminus)
 	if nearbyObjects == nil then error("no objects list") end
 	if viewport.racerId ~= -1 then
-		viewport.racerId = viewport.racerId + plusminus
-		if viewport.racerId == -1 or viewport.racerId == #allRacers + 1 then
-			local b = 1
-			if plusminus == -1 then b = #nearbyObjects end
-			local obj = nextObj(b, plusminus)
-			viewport.racerId = -1
-			if obj ~= nil then
-				viewport.objFocus = obj.ptr
-				forms.settext(viewport.focusLabel, obj.itemName or Objects.mapObjTypes[obj.typeId] or string.format("unk (%i)", obj.typeId))
-				redraw()
-				return
+		if viewport.racerId == 0 and ((viewport.focusPreMovement == false) == (plusminus == 1)) and viewport.scale < 250 then
+			viewport.focusPreMovement = not viewport.focusPreMovement
+		else
+			viewport.focusPreMovement = false
+			viewport.racerId = viewport.racerId + plusminus
+			if viewport.racerId == -1 or viewport.racerId == #allRacers + 1 then
+				local b = 1
+				if plusminus == -1 then b = #nearbyObjects end
+				local obj = nextObj(b, plusminus)
+				viewport.racerId = -1
+				if obj ~= nil then
+					viewport.objFocus = obj.ptr
+					forms.settext(viewport.focusLabel, obj.itemName or Objects.mapObjTypes[obj.typeId] or string.format("unk (%i)", obj.typeId))
+					redraw()
+					return
+				end
+				viewport.racerId = #allRacers - 1
+			elseif viewport.racerId == 0 then
+				viewport.focusPreMovement = plusminus == -1 and viewport.scale < 250
 			end
-			viewport.racerId = #allRacers - 1
 		end
 	else
 		local obj = nil
@@ -1259,7 +1273,7 @@ local function focusClick(viewport, plusminus)
 			if plusminus < 0 then viewport.racerId = #allRacers end
 		end
 	end
-	forms.settext(viewport.focusLabel, string.format("racer %i", viewport.racerId))
+	forms.settext(viewport.focusLabel, string.format("racer %i%s", viewport.racerId, (viewport.focusPreMovement and " (pre)") or ""))
 	redraw()
 end
 
