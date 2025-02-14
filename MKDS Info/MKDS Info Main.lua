@@ -184,6 +184,19 @@ local function contains(list, x)
 	end
 	return false
 end
+local function deepMatch(t1, t2, maxDepth)
+	if maxDepth == 0 then return true end
+	if type(t1) ~= "table" or type(t2) ~= "table" then return t1 == t2 end
+	local pairsChecked = {}
+	for k, v in pairs(t1) do
+		if not deepMatch(t2[k], v, maxDepth - 1) then return false end
+		pairsChecked[k] = true
+	end
+	for k, _ in pairs(t2) do
+		if pairsChecked[k] == nil then return false end
+	end
+	return true
+end
 local function copyTableShallow(table)
 	local new = {}
 	for k, v in pairs(table) do
@@ -1666,7 +1679,17 @@ end
 local function recordPosition()
 	form.recordingFakeGhost = not form.recordingFakeGhost
 	if form.recordingFakeGhost then
-		fakeGhostData = {}
+		-- If we have an exact match, don't delete the whole thing.
+		local fakeGhostFrame = memory.read_s32_le(ptrRaceTimers + 4)
+		thisFrameFakeGhost = fakeGhostData[fakeGhostFrame]
+		if deepMatch(thisFrameFakeGhost, myData, 5) then
+			local count = #fakeGhostData
+			for i = thisFrameFakeGhost + 1, count do
+				fakeGhostData[i] = nil
+			end
+		else
+			fakeGhostData = {}
+		end
 		forms.settext(form.recordPositionButton, "Stop recording")
 	else
 		forms.settext(form.recordPositionButton, "Record fake ghost")
