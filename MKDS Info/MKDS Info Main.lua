@@ -139,41 +139,14 @@ local shouldExit = false
 local redrawSeek = nil
 
 -- Some stuff
-local function NewMyData()
-	local n = {}
-	n.isRacer = true
-	n.positionDelta = 0
-	n.angleDelta = 0
-	n.driftAngleDelta = 0
-	n.basePos = Vector.zero()
-	n.facingAngle = 0
-	n.driftAngle = 0
-	n.movementDirection = Vector.zero()
-	n.movementTarget = Vector.zero()
-	return n
-end
-local myData = NewMyData()
-local allRacers = {}
-local racerCount = 0
+local focuedRacer = nil
 
-local raceData = {}
 local fakeGhostData = {}
 local fakeGhostExists = false
 
 local form = {}
 local watchingId = 0
 local drawWhileUnpaused = true
-local course = {}
-
-local function clearDataOutsideRace()
-	raceData = {
-		coinsBeingCollected = 0,
-	}
-	allRacers = {}
-	form.ghostInputs = nil
-	forms.settext(form.ghostInputHackButton, "Copy from player")
-	course = {}
-end
 
 -- General stuffs -------------------------------
 local satr = 2 * math.pi / 0x10000
@@ -255,6 +228,12 @@ end
 -------------------------------------------------
 
 -- MKDS -----------------------------------------
+local allRacers = {}
+local racerCount = 0
+
+local raceData = {}
+local course = {}
+
 local triangles = nil
 
 local nearbyObjects = nil
@@ -277,12 +256,12 @@ local function gerRacerRawData(ptr)
 	end
 end
 local function getRacerBasicData(ptr)
-	local newData = NewMyData()
-	newData.ptr = ptr
 	if ptr == 0 then
-		return newData
+		error("Attempted to get racer details for null racer.")
 	end
 
+	local newData = { isRacer = true }
+	newData.ptr = ptr
 	newData.basePos = read_pos(ptr + 0x80)
 	newData.objPos = read_pos(ptr + 0x1b8)
 	newData.itemPos = read_pos(ptr + 0x1d8)
@@ -293,7 +272,7 @@ local function getRacerBasicData(ptr)
 	return newData
 end
 local function getRacerBasicData2(raw)
-	newData = {}
+	local newData = { isRacer = true }
 	newData.basePos = get_pos(raw, 0x80)
 	newData.objPos = get_pos(raw, 0x1b8)
 	newData.itemPos = get_pos(raw, 0x1d8)
@@ -305,10 +284,11 @@ local function getRacerBasicData2(raw)
 end
 local function getRacerDetails(allData, previousData, isSameFrame)
 	if allData == nil then
-		return NewMyData()
+		error("Attempted to get racer details for null racer.")
 	end
 
 	local newData = {}
+	newData.isRacer = true
 	-- Read positions and speed
 	newData.basePos = get_pos(allData, 0x80)
 	newData.objPos = get_pos(allData, 0x1B8) -- also used for collision
@@ -396,14 +376,26 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 
 	-- Item
 	local itemDataPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo + 0x210 * allData[0x74])
-	newData.roulleteItem = memory.read_u8(itemDataPtr + 0x2c)
-	newData.itemId = memory.read_u8(itemDataPtr + 0x4c)
-	newData.itemCount = memory.read_u8(itemDataPtr + 0x54)
-	newData.roulleteTimer = memory.read_u8(itemDataPtr + 0x20)
-	newData.roulleteState = memory.read_u8(itemDataPtr + 0x1C)
+	if itemDataPtr ~= 0 then
+		newData.roulleteItem = memory.read_u8(itemDataPtr + 0x2c)
+		newData.itemId = memory.read_u8(itemDataPtr + 0x4c)
+		newData.itemCount = memory.read_u8(itemDataPtr + 0x54)
+		newData.roulleteTimer = memory.read_u8(itemDataPtr + 0x20)
+		newData.roulleteState = memory.read_u8(itemDataPtr + 0x1C)
+	end
 	
 	return newData
 end
+local function BlankRacerData()
+	local n = {}
+	n.basePos = Vector.zero()
+	n.facingAngle = 0
+	n.driftAngle = 0
+	local z = {}
+	for i = 1, 0x5a8 do z[i] = 0 end
+	return getRacerDetails(z, n, false)
+end
+focuedRacer = BlankRacerData()
 
 local function getCheckpointData(dataObj)
 	if ptrCheckNum == 0 then
@@ -505,6 +497,16 @@ local function getCourseData()
 	allRacers = {}
 end
 
+local function clearDataOutsideRace()
+	raceData = {
+		coinsBeingCollected = 0,
+	}
+	allRacers = {}
+	form.ghostInputs = nil
+	forms.settext(form.ghostInputHackButton, "Copy from player")
+	course = {}
+end
+
 local function inRace()
 	-- Check if racer exists.
 	local currentRacersPtr = memory.read_s32_le(Memory.addrs.ptrRacerData)
@@ -575,13 +577,17 @@ local function _mkdsinfo_run_data(isSameFrame)
 	local fakeGhostFrame = memory.read_s32_le(ptrRaceTimers + 4)
 	local watchingFakeGhost = watchingId == racerCount
 	if watchingFakeGhost then
-		myData = getRacerDetails(fakeGhostData[fakeGhostFrame], myData, isSameFrame)
-		myData.rawData = fakeGhostData[fakeGhostFrame]
+		if fakeGhostData[fakeGhostFrame] == nil then
+			focusedRacer = BlankRacerData()
+		else
+			focuedRacer = getRacerDetails(fakeGhostData[fakeGhostFrame], focuedRacer, isSameFrame)
+			focuedRacer.rawData = fakeGhostData[fakeGhostFrame]
+		end
 	else
 		local raw = gerRacerRawData(ptrRacerData + watchingId * 0x5a8)
-		myData = getRacerDetails(raw, myData, isSameFrame)
-		myData.ptr = ptrRacerData + watchingId * 0x5a8
-		myData.rawData = raw
+		focuedRacer = getRacerDetails(raw, focuedRacer, isSameFrame)
+		focuedRacer.ptr = ptrRacerData + watchingId * 0x5a8
+		focuedRacer.rawData = raw
 	end
 
 	local newRacers = {} -- needs new object so drawPackages can have multiple frames
@@ -589,23 +595,22 @@ local function _mkdsinfo_run_data(isSameFrame)
 		if i ~= watchingId then
 			newRacers[i] = getRacerBasicData(ptrRacerData + i * 0x5a8)
 		else
-			newRacers[i] = myData
+			newRacers[i] = focuedRacer
 		end
 	end
 	
 	if watchingId == 0 then
-		getCheckpointData(myData) -- This function only supports player.
+		getCheckpointData(focuedRacer) -- This function only supports player.
 
 		local ghostExists = racerCount >= 2 and Objects.isGhost(ptrRacerData + 0x5a8)
 		if ghostExists then
-			myData.ghost = newRacers[1]
-			myData.ghost.basePos = read_pos(myData.ghost.ptr + 0x80)
+			focuedRacer.ghost = newRacers[1]
 		end
 	end
 
-	local o = Objects.getNearbyObjects(myData, config.objectRenderDistance)
+	local o = Objects.getNearbyObjects(focuedRacer, config.objectRenderDistance)
 	nearbyObjects = o[1]
-	myData.nearestObject = o[2]
+	focuedRacer.nearestObject = o[2]
 
 	-- Ghost handling
 	if form.ghostInputs ~= nil then
@@ -646,13 +651,12 @@ local function _mkdsinfo_run_data(isSameFrame)
 	fakeGhostExists = false
 	if not watchingFakeGhost then
 		if form.recordingFakeGhost then
-			fakeGhostData[fakeGhostFrame] = myData.rawData
+			fakeGhostData[fakeGhostFrame] = focuedRacer.rawData
 		end
 		if newRacers[racerCount] ~= nil then
-			myData.ghost = newRacers[racerCount]
+			focuedRacer.ghost = newRacers[racerCount]
 			fakeGhostExists = true
 		end
-		
 	else
 		fakeGhostExists = true
 	end
@@ -895,7 +899,7 @@ local roulleteItemNames = { -- The IDs according to the item roullete.
 }
 roulleteItemNames[0] = "green shell"
 local function drawItemInfo(data)
-	if data == nil then return end
+	if data == nil or data.roulleteItem == nil then return end
 
 	if data.roulleteItem ~= 19 then
 		gui.text(6, 84, roulleteItemNames[data.roulleteItem])
@@ -1105,12 +1109,17 @@ local function _mkdsinfo_run_draw(isInRace)
 	gui.cleartext()
 	if isInRace then
 		if config.showBottomScreenInfo then
-			drawInfoBottomScreen(myData)
-			drawItemInfo(myData)
+			drawInfoBottomScreen(focuedRacer)
+			drawItemInfo(focuedRacer)
 		end
 
+		-- If the main KCL view is not turned on, we want to show the 
+		-- nearby triangles data for the bottom-screen focused racer.
+		local temp = mainCamera.racerId
+		if mainCamera.active == false then mainCamera.racerId = watchingId end
 		updateViewport(mainCamera)
 		drawViewport(mainCamera)
+		if mainCamera.active == false then mainCamera.racerId = temp end
 		for i = 1, #viewports do
 			updateViewport(viewports[i])
 			drawViewport(viewports[i])
@@ -1185,13 +1194,15 @@ local function useInputsClick()
 	end
 end
 local function _watchUpdate()
-	local s = "player"
-	if watchingId ~= 0 then
-		if Objects.isGhost(allRacers[watchingId].ptr) then
-			s = "ghost"
-		else
-			s = "cpu " .. watchingId
-		end
+	local s
+	if watchingId == 0 then
+		s = "player"
+	elseif watchingId == racerCount then
+		s = "fake ghost"
+	elseif Objects.isGhost(allRacers[watchingId].ptr) then
+		s = "ghost"
+	else
+		s = "cpu " .. watchingId
 	end
 	forms.settext(form.watchLabel, s)
 
@@ -1290,7 +1301,7 @@ end
 
 local function setComparisonPointClick()
 	if form.comparisonPoint == nil then
-		local pos = myData.basePos
+		local pos = focuedRacer.basePos
 		form.comparisonPoint = { pos[1], pos[2], pos[3] }
 		forms.settext(form.setComparisonPoint, "Clear comparison point")
 	else
@@ -1484,7 +1495,7 @@ local function _changePerspective(cam)
 			cam.fovH = camData.fovH
 			Graphics.setPerspective(cam, camData.direction)
 		else
-			cam.location = myData.objPos
+			cam.location = focuedRacer.objPos
 		end
 		redraw()
 	end
@@ -1707,7 +1718,7 @@ local function recordPosition()
 		-- If we have an exact match, don't delete the whole thing.
 		local fakeGhostFrame = memory.read_s32_le(ptrRaceTimers + 4)
 		local ghost = fakeGhostData[fakeGhostFrame]
-		if ghost ~= nil and deepMatch(ghost, myData.rawData, 1) then
+		if ghost ~= nil and deepMatch(ghost, focuedRacer.rawData, 1) then
 			local count = #fakeGhostData
 			for i = fakeGhostFrame + 1, count do
 				fakeGhostData[i] = nil
