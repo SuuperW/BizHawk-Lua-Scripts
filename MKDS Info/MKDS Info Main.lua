@@ -1675,32 +1675,40 @@ local function makeNewKclView()
 	local viewport = makeDefaultViewport()
 	Graphics.setPerspective(viewport, {0, 0x1000, 0})
 
-	local hieghtOfControls = 0 -- temporary value
-	viewport.window = forms.newform(viewport.w * 2, viewport.h * 2 + hieghtOfControls, "KCL View", function ()
+	local hiddenHeight = 27 -- Y pos of box when controls are hidden
+	viewport.window = forms.newform(viewport.w * 2, viewport.h * 2, "KCL View", function ()
 		MKDS_INFO_FORM_HANDLES[viewport.window] = nil
 		removeItem(viewports, viewport)
 	end)
 	MKDS_INFO_FORM_HANDLES[viewport.window] = true
-	local theBox = forms.pictureBox(viewport.window, 0, hieghtOfControls, viewport.w * 2, viewport.h * 2)
+	local theBox = forms.pictureBox(viewport.window, 0, 0, viewport.w * 2, viewport.h * 2)
 	viewport.box = theBox
 	forms.setproperty(viewport.window, "FormBorderStyle", "Sizable")
 	forms.setproperty(viewport.window, "MaximizeBox", "True")
-	-- No resize events. Make a resize/refresh button? Click the box? Box is easy but would be a kinda hidden feature.
-	local temp = forms.label(viewport.window, "Click the box to resize it!", 15, viewport.h * 2 + hieghtOfControls)
-	forms.setproperty(temp, "AutoSize", true)
+	forms.setDefaultTextBackground(theBox, 0xff222222)
+	viewport.drawText = function(x, y, t, c) forms.drawText(theBox, x, viewport.h + viewport.h - y, t, c, nil, 14, "verdana", "bold") end
 
 	viewport.boxWidthDelta = forms.getproperty(viewport.window, "Width") - forms.getproperty(theBox, "Width")
 	viewport.boxHeightDelta = forms.getproperty(viewport.window, "Height") - forms.getproperty(theBox, "Height")
+
+	local hieghtOfControls = makeCollisionControls(viewport.window, viewport, 5, 3)
+	forms.setproperty(viewport.box, "Top", hieghtOfControls)
+	forms.setsize(viewport.window, viewport.w * 2, viewport.h * 2 + hieghtOfControls)
+
+	-- No resize events. Make a resize/refresh button? Click the box? Box is easy but would be a kinda hidden feature.
+	local temp = forms.label(viewport.window, "Click the box to resize it!", 15, viewport.h * 2 + hieghtOfControls)
+	forms.setproperty(temp, "AutoSize", true)
 	forms.addclick(theBox, function()
 		local width = forms.getproperty(theBox, "Width")
 		local height = forms.getproperty(theBox, "Height")
 		-- Is this a resize?
+		local boxHeightDelta = viewport.boxHeightDelta + tonumber(forms.getproperty(theBox, "Top"))
 		local fw = forms.getproperty(viewport.window, "Width")
 		local fh = forms.getproperty(viewport.window, "Height")
-		if fw - width ~= viewport.boxWidthDelta or fh - height ~= viewport.boxHeightDelta then
-			forms.setsize(theBox, fw - viewport.boxWidthDelta, fh - viewport.boxHeightDelta)
+		if fw - width ~= viewport.boxWidthDelta or fh - height ~= boxHeightDelta then
+			forms.setsize(theBox, fw - viewport.boxWidthDelta, fh - boxHeightDelta)
 			viewport.w = (fw - viewport.boxWidthDelta) / 2
-			viewport.h = (fh - viewport.boxHeightDelta) / 2
+			viewport.h = (fh - boxHeightDelta) / 2
 			viewport.x = viewport.w
 			viewport.y = viewport.h
 			redraw()
@@ -1722,22 +1730,15 @@ local function makeNewKclView()
 		viewport.frozen = wasFrozen
 	end)
 
-	forms.setDefaultTextBackground(theBox, 0xff222222)
-	viewport.drawText = function(x, y, t, c) forms.drawText(theBox, x, viewport.h + viewport.h - y, t, c, nil, 14, "verdana", "bold") end
-
-	hieghtOfControls = makeCollisionControls(viewport.window, viewport, 5, 3)
-	forms.setproperty(viewport.box, "Top", hieghtOfControls)
-	forms.setsize(viewport.window, viewport.w * 2, viewport.h * 2 + hieghtOfControls)
-
 	-- I was going to put this on top of the box, but BizHawk appears to force picture boxes on top.
 	viewport.showControlsButton = forms.button(viewport.window, "^", function()
 		local current = forms.getproperty(viewport.box, "Top")
-		if current == "27" then -- getproperty returns string
+		if current == hiddenHeight .. "" then -- getproperty returns string
 			forms.setproperty(viewport.box, "Top", hieghtOfControls)
 			forms.setsize(viewport.window, viewport.w * 2, viewport.h * 2 + hieghtOfControls)
 			forms.settext(viewport.showControlsButton, "^")
 		else
-			forms.setproperty(viewport.box, "Top", 27)
+			forms.setproperty(viewport.box, "Top", hiddenHeight)
 			forms.setsize(viewport.window, viewport.w * 2, viewport.h * 2)
 			forms.settext(viewport.showControlsButton, "v")
 		end
