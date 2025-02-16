@@ -512,9 +512,9 @@ local function drawTriangle(tri, d, racer, dotSize, viewport)
 			addToDrawingQue(9, { PIXEL, tri.vertex[2], 0xffff0000 })
 			addToDrawingQue(9, { PIXEL, tri.vertex[3], 0xffff0000 })
 		else
-			addToDrawingQue(9, { CIRCLE, tri.vertex[1], 1.5, 0xffff0000, 0xffff0000 })
-			addToDrawingQue(9, { CIRCLE, tri.vertex[2], 1.5, 0xffff0000, 0xffff0000 })
-			addToDrawingQue(9, { CIRCLE, tri.vertex[3], 1.5, 0xffff0000, 0xffff0000 })
+			addToDrawingQue(9, { CIRCLE, tri.vertex[1], dotSize, 0xffff0000, 0xffff0000 })
+			addToDrawingQue(9, { CIRCLE, tri.vertex[2], dotSize, 0xffff0000, 0xffff0000 })
+			addToDrawingQue(9, { CIRCLE, tri.vertex[3], dotSize, 0xffff0000, 0xffff0000 })
 		end
 	end
 
@@ -528,7 +528,7 @@ end
 local function makeKclQue(viewport, focusObject, allTriangles, textonly)
 	if allTriangles ~= nil and textonly ~= true then
 		for i = 1, #allTriangles do
-			drawTriangle(allTriangles[i], nil, focusObject, 0, viewport)
+			drawTriangle(allTriangles[i], nil, focusObject, nil, viewport)
 		end
 	end
 	if focusObject == nil then return end
@@ -663,7 +663,7 @@ local function makePathsQue(paths, endFrame)
 		local path = paths[j].path
 		local color = paths[j].color
 		local last = nil
-		for i = endFrame - 1000, endFrame do
+		for i = endFrame - 750, endFrame do
 			if path[i] ~= nil and last ~= nil then
 				addToDrawingQue(3, { LINE, last, path[i], color })
 			end
@@ -719,9 +719,8 @@ local function processPackage(camera, package)
 end
 local function drawClient(camera, package)
 	local operations = processPackage(camera, package)
-	local hasGraphical = camera.drawKcl or camera.drawObjects or camera.drawCheckpoints
 
-	if (camera.overlay == false and camera.active == true) and ((#operations > 0 and hasGraphical) or camera.isPrimary ~= true) then
+	if (camera.overlay == false and camera.active == true) or (camera.isPrimary ~= true) then
 		gui.drawRectangle(camera.x - camera.w, camera.y - camera.h, camera.w * 2, camera.h * 2, "black", "black")
 	end
 	for i = 1, #operations do
