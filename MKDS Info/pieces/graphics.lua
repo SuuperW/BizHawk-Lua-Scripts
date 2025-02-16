@@ -628,7 +628,7 @@ local function makeObjectsQue(objects, racer)
 	end
 end
 
-local function makeCheckpointsQue(checkpoints, racer)
+local function makeCheckpointsQue(checkpoints, racer, package)
 	local pos = racer and racer.basePos
 	if pos == nil then pos = { 0, 0x100000, 0 } end
 	local function elevate(p)
@@ -658,6 +658,20 @@ local function makeCheckpointsQue(checkpoints, racer)
 	-- can we do crosshairs?
 end
 
+local function makePathsQue(paths, endFrame)
+	for j = 1, #paths do
+		local path = paths[j].path
+		local color = paths[j].color
+		local last = nil
+		for i = endFrame - 1000, endFrame do
+			if path[i] ~= nil and last ~= nil then
+				addToDrawingQue(3, { LINE, last, path[i], color })
+			end
+			last = path[i]
+		end
+	end
+end
+
 local function processPackage(camera, package)
 	que = {}
 	local thing
@@ -678,7 +692,10 @@ local function processPackage(camera, package)
 			makeRacerHitboxes(package.allRacers, thing)
 		end
 		if camera.drawCheckpoints == true then
-			makeCheckpointsQue(package.checkpoints, thing)
+			makeCheckpointsQue(package.checkpoints, thing, package)
+		end
+		if camera.drawPaths == true then
+			makePathsQue(package.paths, package.frame)
 		end
 	elseif camera.isPrimary then
 		-- We always show the text for nearest+touched triangles.

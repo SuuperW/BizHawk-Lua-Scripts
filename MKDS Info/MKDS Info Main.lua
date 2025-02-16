@@ -144,6 +144,8 @@ local focuedRacer = nil
 local fakeGhostData = {}
 local fakeGhostExists = false
 
+local recordedPaths = {}
+
 local form = {}
 local watchingId = 0
 local drawWhileUnpaused = true
@@ -528,6 +530,13 @@ local function inRace()
 		course.racersPtr = currentRacersPtr
 		course.frame = frame - timer
 		getCourseData()
+
+		racerCount = memory.read_s32_le(Memory.addrs.racerCount)
+		recordedPaths = {}
+		for i = 1, racerCount + 1 do -- Yes, +1 of racerCount. For fake ghost.
+			recordedPaths[i] = { path = {}, color = 0xffff0000 }
+		end
+		recordedPaths[1].color = 0xff0088ff
 	end
 	
 	return true
@@ -574,14 +583,14 @@ end
 -- Main info function
 local function _mkdsinfo_run_data(isSameFrame)
 	racerCount = memory.read_s32_le(Memory.addrs.racerCount)
-	local fakeGhostFrame = memory.read_s32_le(ptrRaceTimers + 4)
+	local raceFrame = memory.read_s32_le(ptrRaceTimers + 4)
 	local watchingFakeGhost = watchingId == racerCount
 	if watchingFakeGhost then
-		if fakeGhostData[fakeGhostFrame] == nil then
+		if fakeGhostData[raceFrame] == nil then
 			focusedRacer = BlankRacerData()
 		else
-			focuedRacer = getRacerDetails(fakeGhostData[fakeGhostFrame], focuedRacer, isSameFrame)
-			focuedRacer.rawData = fakeGhostData[fakeGhostFrame]
+			focuedRacer = getRacerDetails(fakeGhostData[raceFrame], focuedRacer, isSameFrame)
+			focuedRacer.rawData = fakeGhostData[raceFrame]
 		end
 	else
 		local raw = gerRacerRawData(ptrRacerData + watchingId * 0x5a8)
@@ -597,6 +606,7 @@ local function _mkdsinfo_run_data(isSameFrame)
 		else
 			newRacers[i] = focuedRacer
 		end
+		recordedPaths[i + 1].path[raceFrame] = newRacers[i].objPos
 	end
 	
 	if watchingId == 0 then
@@ -645,13 +655,14 @@ local function _mkdsinfo_run_data(isSameFrame)
 	end
 
 	-- FAKE ghost
-	if fakeGhostData[fakeGhostFrame] ~= nil then
-		newRacers[racerCount] = getRacerBasicData2(fakeGhostData[fakeGhostFrame])
+	if fakeGhostData[raceFrame] ~= nil then
+		newRacers[racerCount] = getRacerBasicData2(fakeGhostData[raceFrame])
+		recordedPaths[racerCount][raceFrame] = newRacers[racerCount].objPos
 	end
 	fakeGhostExists = false
 	if not watchingFakeGhost then
 		if form.recordingFakeGhost then
-			fakeGhostData[fakeGhostFrame] = focuedRacer.rawData
+			fakeGhostData[raceFrame] = focuedRacer.rawData
 		end
 		if newRacers[racerCount] ~= nil then
 			focuedRacer.ghost = newRacers[racerCount]
@@ -672,6 +683,8 @@ local function _mkdsinfo_run_data(isSameFrame)
 		allTriangles = triangles,
 		objects = nearbyObjects,
 		checkpoints = checkpoints,
+		paths = recordedPaths,
+		frame = raceFrame,
 	}
 	if not isSameFrame then
 		drawingPackages[3] = drawingPackages[2]
@@ -1630,31 +1643,39 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 	)
 
 	-- what is drawn
-	y = baseY
+	y = baseY + 3
 	x = rightmost - 10
-	temp = forms.label(kclForm, "Draw:", x, y + 3)
+	temp = forms.label(kclForm, "Draw:", x, y)
 	forms.setproperty(temp, "AutoSize", true)
 	x = forms.getproperty(temp, "Right") + labelMargin
-	temp = forms.checkbox(kclForm, "kcl", x, y + 3)
+	temp = forms.checkbox(kclForm, "kcl", x, y)
 	forms.setproperty(temp, "AutoSize", true)
 	forms.setproperty(temp, "Checked", true)
 	forms.addclick(temp, function() viewport.drawKcl = not viewport.drawKcl; redraw(); end)
-	y = y + 26
-	temp = forms.checkbox(kclForm, "objects", x, y + 3)
+	y = y + 21
+	temp = forms.checkbox(kclForm, "objects", x, y)
 	forms.setproperty(temp, "AutoSize", true)
 	forms.setproperty(temp, "Checked", true)
 	forms.addclick(temp, function() viewport.drawObjects = not viewport.drawObjects; redraw(); end)
-	y = y + 26
-	temp = forms.checkbox(kclForm, "checkpoints", x, y + 3)
+	y = y + 21
+	temp = forms.checkbox(kclForm, "checkpoints", x, y)
 	forms.setproperty(temp, "AutoSize", true)
 	forms.addclick(temp, function() viewport.drawCheckpoints = not viewport.drawCheckpoints; redraw(); end)
+	y = y + 21
+	temp = forms.checkbox(kclForm, "paths", x, y)
+	forms.setproperty(temp, "AutoSize", true)
+	forms.addclick(temp, function() viewport.drawPaths = not viewport.drawPaths; redraw(); end)
+
+	y = y + 21
+	y = y + 4 -- bottom padding
+	return y - baseY
 end
 
 local function makeNewKclView()
 	local viewport = makeDefaultViewport()
 	Graphics.setPerspective(viewport, {0, 0x1000, 0})
 
-	local hieghtOfControls = 82
+	local hieghtOfControls = 0 -- temporary value
 	viewport.window = forms.newform(viewport.w * 2, viewport.h * 2 + hieghtOfControls, "KCL View", function ()
 		MKDS_INFO_FORM_HANDLES[viewport.window] = nil
 		removeItem(viewports, viewport)
@@ -1701,11 +1722,26 @@ local function makeNewKclView()
 		viewport.frozen = wasFrozen
 	end)
 
-	--gui.drawString(5, i * 15, "asdf this is a text test string drawing", nil, nil, 16, "courier new", "bold")
 	forms.setDefaultTextBackground(theBox, 0xff222222)
 	viewport.drawText = function(x, y, t, c) forms.drawText(theBox, x, viewport.h + viewport.h - y, t, c, nil, 14, "verdana", "bold") end
 
-	makeCollisionControls(viewport.window, viewport, 5, 3)
+	hieghtOfControls = makeCollisionControls(viewport.window, viewport, 5, 3)
+	forms.setproperty(viewport.box, "Top", hieghtOfControls)
+	forms.setsize(viewport.window, viewport.w * 2, viewport.h * 2 + hieghtOfControls)
+
+	-- I was going to put this on top of the box, but BizHawk appears to force picture boxes on top.
+	viewport.showControlsButton = forms.button(viewport.window, "^", function()
+		local current = forms.getproperty(viewport.box, "Top")
+		if current == "27" then -- getproperty returns string
+			forms.setproperty(viewport.box, "Top", hieghtOfControls)
+			forms.setsize(viewport.window, viewport.w * 2, viewport.h * 2 + hieghtOfControls)
+			forms.settext(viewport.showControlsButton, "^")
+		else
+			forms.setproperty(viewport.box, "Top", 27)
+			forms.setsize(viewport.window, viewport.w * 2, viewport.h * 2)
+			forms.settext(viewport.showControlsButton, "v")
+		end
+	end, 300, 3, 23, 23)
 
 	viewports[#viewports + 1] = viewport
 	updateViewport(viewport)
