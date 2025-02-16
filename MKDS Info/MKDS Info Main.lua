@@ -657,7 +657,7 @@ local function _mkdsinfo_run_data(isSameFrame)
 	-- FAKE ghost
 	if fakeGhostData[raceFrame] ~= nil then
 		newRacers[racerCount] = getRacerBasicData2(fakeGhostData[raceFrame])
-		recordedPaths[racerCount][raceFrame] = newRacers[racerCount].objPos
+		recordedPaths[racerCount + 1].path[raceFrame] = newRacers[racerCount].objPos
 	end
 	fakeGhostExists = false
 	if not watchingFakeGhost then
