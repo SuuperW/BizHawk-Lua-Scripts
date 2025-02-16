@@ -1739,7 +1739,7 @@ local function makeNewKclView()
 			forms.settext(viewport.showControlsButton, "^")
 		else
 			forms.setproperty(viewport.box, "Top", hiddenHeight)
-			forms.setsize(viewport.window, viewport.w * 2, viewport.h * 2)
+			forms.setsize(viewport.window, viewport.w * 2, viewport.h * 2 + hiddenHeight)
 			forms.settext(viewport.showControlsButton, "v")
 		end
 	end, 300, 3, 23, 23)
