@@ -266,6 +266,7 @@ local function getRacerBasicData(ptr)
 	newData.ptr = ptr
 	newData.basePos = read_pos(ptr + 0x80)
 	newData.objPos = read_pos(ptr + 0x1b8)
+	newData.preMovementObjPos = read_pos(ptr + 0x1C4)
 	newData.itemPos = read_pos(ptr + 0x1d8)
 	newData.objRadius = memory.read_s32_le(ptr + 0x1d0)
 	newData.itemRadius = newData.objRadius
@@ -277,6 +278,7 @@ local function getRacerBasicData2(raw)
 	local newData = { isRacer = true }
 	newData.basePos = get_pos(raw, 0x80)
 	newData.objPos = get_pos(raw, 0x1b8)
+	newData.preMovementObjPos = get_pos(raw, 0x1C4)
 	newData.itemPos = get_pos(raw, 0x1d8)
 	newData.objRadius = get_s32(raw, 0x1d0)
 	newData.itemRadius = newData.objRadius
