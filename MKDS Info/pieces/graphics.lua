@@ -630,6 +630,10 @@ local function makeObjectsQue(focusObject)
 			_drawObjectCollision(nil, objects[i])
 		end
 	end
+	-- A focused racer will have a KCL hitbox drawn. Other things won't.
+	if not focusObject.isRacer then
+		_drawObjectCollision(nil, focusObject)
+	end
 end
 
 local function makeCheckpointsQue(checkpoints, racer, package)
