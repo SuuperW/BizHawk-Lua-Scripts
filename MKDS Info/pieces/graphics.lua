@@ -426,7 +426,7 @@ local function makeRacerHitboxes(allRacers, focusedRacer)
 	local isTT = count <= 2
 	-- Not the best TT detection. But, if we are in TT mode we want to only show for-triangle hitboxes!
 	-- Outside of TT, non-player hitboxes will be drawn as objects instead.
-	if not isTT then count = 1 end
+	if not isTT then count = 0 end
 
 	-- Primary hitbox circle is blue
 	local color = 0xff0000ff
@@ -531,7 +531,6 @@ local function makeKclQue(viewport, focusObject, allTriangles, textonly)
 			drawTriangle(allTriangles[i], nil, focusObject, nil, viewport)
 		end
 	end
-	if focusObject == nil then return end
 
 	local touchData = KCL.getCollisionDataForRacer({
 		pos = focusObject.objPos,
@@ -604,7 +603,9 @@ local function makeKclQue(viewport, focusObject, allTriangles, textonly)
 	end
 end
 
-local function _drawObjectCollision(racer, obj)	
+local function _drawObjectCollision(racer, obj)
+	if obj.skip == true then return end
+
 	local objColor = 0xff40c0e0
 	if obj.typeId == 106 then objColor = 0xffffff11 end
 	addToDrawingQue(-4, { HITBOX, obj, obj.hitboxType, objColor })
@@ -617,11 +618,14 @@ local function _drawObjectCollision(racer, obj)
 		addToDrawingQue(-2, { HITBOX_PAIR, obj, racer })
 	end
 end
-local function makeObjectsQue(objects, racer)
-	if objects == nil then error("Expected objects list to not be nil.") end
+local function makeObjectsQue(focusObject)
+	if focusObject == nil then error("Attempted to draw objects with no focus.") end
+	local nearby = Objects.getNearbyObjects(focusObject, mkdsiConfig.objectRenderDistance)
+	local objects = nearby[1]
+	local nearest = nearby[2]
 	for i = 1, #objects do
-		if racer ~= nil and objects[i] == racer.nearestObject then
-			_drawObjectCollision(racer, objects[i])
+		if objects[i] == nearest then
+			_drawObjectCollision(focusObject, objects[i])
 		else
 			_drawObjectCollision(nil, objects[i])
 		end
@@ -680,13 +684,16 @@ local function processPackage(camera, package)
 	else
 		thing = camera.obj
 	end
+	if thing ~= nil then
+		Objects.getObjectDetails(thing)
+	end
 	if camera.active then
 		if camera.drawKcl == true then
 			if camera.racerId == nil then error("no racer id") end
 			makeKclQue(camera, thing, (camera.renderAllTriangles and package.allTriangles) or nil)
 		end
 		if camera.drawObjects == true then
-			makeObjectsQue(package.objects, thing)
+			makeObjectsQue(thing)
 		end
 		if camera.drawKcl == true or camera.drawObjects == true then
 			makeRacerHitboxes(package.allRacers, thing)

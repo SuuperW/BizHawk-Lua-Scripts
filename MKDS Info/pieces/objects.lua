@@ -289,6 +289,10 @@ local function getMapObjDetails(obj)
 		read_pos(obj.ptr + 0x40),
 	}
 
+	-- Is this right?
+	obj.itemPos = obj.objPos
+	obj.itemRadius = obj.objRadius
+
 	-- Hitbox
 	local hitboxType = ""
 	if memory.read_u16_le(objPtr + 2) & 1 == 0 then
@@ -378,6 +382,10 @@ local function isGhost(objPtr)
 	return flags7c & 0x04 ~= 0
 end
 local function getObjectDetails(obj)
+	-- isRacer is used to identify the racer Lua tables
+	-- Those already have racer's details and should not also get object's details.
+	if obj.gotDetails == true or obj.isRacer == true then return end
+	obj.gotDetails = true
 	obj.basePos = obj.objPos
 	local flags = obj.flags
 	if flags & FLAG_MAPOBJ ~= 0 then
@@ -414,74 +422,68 @@ local function getObjectDetails(obj)
 		obj.dynamic = false
 	end
 end
-local function getNearbyObjects(racer, dist)
+
+local allObjects = {}
+local function readObjects()
 	local maxCount = memory.read_u16_le(Memory.addrs.ptrObjStuff + 0x08)
 	local count = 0
 	local itemsThatAreObjs = {}
-	local distdist = dist * dist
 
 	-- get basic info
-	local nearbyObjects = {}
+	local newObjectsTable = {}
+	local list = {}
 	local objData = memory.read_bytes_as_array(ptrObjArray + 1, 0x1c * 255 - 1)
 	--objData[0] = memory.read_u8(ptrObjArray)
-	for id = 0, 255 do -- 255: ?? Idk what max is. "maxCount" can't be used because the array we look through can have holes
+	local id = 0
+	while id < 255 and count ~= maxCount do -- 255? What is max max?
 		local current = id * 0x1c
 		local objPtr = get_u32(objData, current + 0x18)
 		local flags = get_u16(objData, current + 0x14)
+		-- local declarations must be made before all gotos
+		local posPtr
+		local obj
 
-		if objPtr ~= 0 then
-			count = count + 1
-			-- flag 0x0200: deactivated or something
-			if flags & 0x200 == 0 then
-				local skip = false
-				local obj = {
-					id = id,
-					objPos = read_pos(get_s32(objData, current + 0xC)),
-					flags = flags,
-					ptr = objPtr,
-				}
-				if flags & FLAG_MAPOBJ ~= 0 then
-					obj.typeId = memory.read_s16_le(obj.ptr)
-					if obj.typeId == 0x68 and isCoinCollected(objPtr) then
-						skip = true
-					end
-				elseif flags & FLAG_RACER ~= 0 then
-					if isGhost(objPtr) or objPtr == racer.ptr then
-						skip = true
-					end
-				elseif flags & FLAG_ITEM ~= 0 then
-					itemsThatAreObjs[objPtr] = true
-				elseif flags & FLAG_DYNAMIC == 0 then
-					skip = true
-				end
-				if not skip then
-					local racerPos = racer.objPos
-					if flags & FLAG_ITEM ~= 0 then
-						racerPos = racer.itemPos
-					elseif flags & FLAG_RACER ~= 0 then
-						racerPos = racer.itemPos
-						obj.objPos = read_pos(obj.ptr + 0x1d8)
-					end
-					local dx = racerPos[1] - obj.objPos[1]
-					local dz = racerPos[3] - obj.objPos[3]
-					local d = dx * dx + dz * dz
-					if d <= distdist then
-						nearbyObjects[#nearbyObjects + 1] = obj
-					else
-						if (obj.typeId == 209 and d <= 9e13) or (obj.typeId == 11 and d < 1.2e13) or (obj.typeId == 205 and d < 1e13) then
-							-- obj 209: rotating bridge in Bowser's Castle: it's huge
-							-- obj 205: TTC clock hands
-							-- obj 11: stop signage, they are huge boxes
-							nearbyObjects[#nearbyObjects + 1] = obj
-						end
-					end
-				end
-			end
-			
-			if count == maxCount then
-				break
-			end
+		if objPtr == 0 then
+			goto continue
 		end
+
+		count = count + 1
+		-- flag 0x0200: deactivated or something
+		if flags & 0x200 ~= 0 then
+			goto continue
+		end
+		posPtr = get_s32(objData, current + 0xC)
+		if posPtr == 0 then
+			-- Apparently this is a way that the game "removes" an object from the list.
+			goto continue
+		end
+
+		obj = {
+			id = id,
+			objPos = read_pos(posPtr),
+			flags = flags,
+			ptr = objPtr,
+			skip = false,
+		}
+		if flags & FLAG_MAPOBJ ~= 0 then
+			obj.typeId = memory.read_s16_le(obj.ptr)
+			if obj.typeId == 0x68 and isCoinCollected(objPtr) then
+				obj.skip = true
+			end
+		elseif flags & FLAG_RACER ~= 0 then
+			if isGhost(objPtr) then
+				obj.skip = true
+			end
+		elseif flags & FLAG_ITEM ~= 0 then
+			itemsThatAreObjs[objPtr] = true
+		elseif flags & FLAG_DYNAMIC == 0 then
+			obj.skip = true
+		end
+		newObjectsTable[objPtr] = obj
+		list[#list + 1] = obj
+
+		::continue::
+		id = id + 1
 	end
 
 	-- items
@@ -491,65 +493,102 @@ local function getNearbyObjects(racer, dist)
 		local setPtr = memory.read_u32_le(sp + 4)
 		local setCount = memory.read_u16_le(sp + 0x10)
 		for i = 0, setCount - 1 do
-			local itemObj = {
-				ptr = memory.read_u32_le(setPtr + i*4),
-				flags = FLAG_ITEM,
-			}
-			if itemsThatAreObjs[itemObj.ptr] == nil then
-				local itemFlags = memory.read_u32_le(itemObj.ptr + 0x74)
-				if itemFlags & 0x0080000 == 0 then -- Idk what these flags mean
+			local itemPtr = memory.read_u32_le(setPtr + i*4)
+			if itemsThatAreObjs[itemPtr] == nil then
+				local itemFlags = memory.read_u32_le(itemPtr + 0x74)
+				newObjectsTable[itemPtr] = {
+					ptr = itemPtr,
+					flags = FLAG_ITEM,
+					skip = itemFlags & 0x0080000 ~= 0, -- Idk what these flags mean
+					itemFlags = itemFlags,
 					-- others set were 0x0020080
-					itemObj.objPos = read_pos(itemObj.ptr + 0x50)
-					local dx = racer.itemPos[1] - itemObj.objPos[1]
-					local dz = racer.itemPos[3] - itemObj.objPos[3]
-					local d = dx * dx + dz * dz
-					if d <= dist then
-						nearbyObjects[#nearbyObjects + 1] = itemObj
-					end
-				end
+					objPos = read_pos(itemPtr + 0x50)
+				}
+				list[#list + 1] = newObjectsTable[itemPtr]
+			else
+				local itemFlags = memory.read_u32_le(itemPtr + 0x74)
+				local obj = newObjectsTable[itemPtr]
+				obj.skip = obj.skip or (itemFlags & 0x0080000 ~= 0)
+				obj.itemFlags = itemFlags
+				itemsThatAreObjs[itemPtr] = nil
 			end
 		end
 	end
-	
-	-- get details for nearby objects
+
+	for k, v in pairs(itemsThatAreObjs) do
+		print("orphaned item", k, v)
+	end
+
+	allObjects = newObjectsTable
+	allObjects.list = list
+	return allObjects
+end
+local function getNearbyObjects(thing, dist)
+	local distdist = dist * dist
+
+	local nearbyObjects = {}
+	for _, obj in pairs(allObjects.list) do
+		if obj.skip == false and obj.ptr ~= thing.ptr then
+			local flags = obj.flags
+
+			local racerPos = thing.objPos
+			if flags & (FLAG_ITEM | FLAG_RACER) ~= 0 then
+				racerPos = thing.itemPos
+			end
+			local dx = racerPos[1] - obj.objPos[1]
+			local dz = racerPos[3] - obj.objPos[3]
+			local d = dx * dx + dz * dz
+			if d <= distdist then
+				nearbyObjects[#nearbyObjects + 1] = obj
+			else
+				if (obj.typeId == 209 and d <= 9e13) or (obj.typeId == 11 and d < 1.2e13) or (obj.typeId == 205 and d < 1e13) then
+					-- obj 209: rotating bridge in Bowser's Castle: it's huge
+					-- obj 205: TTC clock hands
+					-- obj 11: stop signage, they are huge boxes
+					nearbyObjects[#nearbyObjects + 1] = obj
+				end
+			end
+		end -- if skip
+	end -- for
+
 	for i = 1, #nearbyObjects do
 		local obj = nearbyObjects[i]
 
 		getObjectDetails(obj)
 
 		if obj.hitboxType == "cylindrical" then
-			local relative = Vector.subtract(racer.objPos, obj.objPos)
+			local relative = Vector.subtract(thing.objPos, obj.objPos)
 			local distance = math.sqrt(relative[1] * relative[1] + relative[3] * relative[3])
-			obj.distance = distance - racer.objRadius - obj.objRadius
+			obj.distance = distance - thing.objRadius - obj.objRadius
 			-- TODO: Check vertical distance?
 		elseif obj.hitboxType == "spherical" then
-			local relative = Vector.subtract(racer.objPos, obj.objPos)
+			local relative = Vector.subtract(thing.objPos, obj.objPos)
 			local distance = math.sqrt(relative[1] * relative[1] + relative[2] * relative[2] + relative[3] * relative[3])
-			obj.distance = distance - racer.objRadius - obj.objRadius
+			obj.distance = distance - thing.objRadius - obj.objRadius
 			-- Special object: pendulum
 			if obj.hitboxFunc == Memory.hitboxFuncs.pendulum then
-				relative = Vector.subtract(racer.objPos, obj.objPos)
+				relative = Vector.subtract(thing.objPos, obj.objPos)
 				obj.distanceComponents = {
 					h = math.floor(obj.distance),
-					v = Vector.dotProduct_t(relative, obj.orientation[3]) - racer.objRadius - obj.sizes[3],
+					v = Vector.dotProduct_t(relative, obj.orientation[3]) - thing.objRadius - obj.sizes[3],
 				}
 				obj.distance = math.max(obj.distanceComponents.h, obj.distanceComponents.v)
 			end
 		elseif obj.hitboxType == "item" then
-			local relative = Vector.subtract(racer.itemPos, obj.itemPos)
+			local relative = Vector.subtract(thing.itemPos, obj.itemPos)
 			local distance = math.sqrt(relative[1] * relative[1] + relative[2] * relative[2] + relative[3] * relative[3])
-			obj.distance = distance - racer.itemRadius - obj.itemRadius
+			obj.distance = distance - thing.itemRadius - obj.itemRadius
 		elseif obj.boxy then
-			obj.distanceComponents = getBoxyDistances(obj, racer.objPos, racer.objRadius)
+			obj.distanceComponents = getBoxyDistances(obj, thing.objPos, thing.objRadius)
 			-- TODO: Do all dynamic boxy objects have racer-spherical hitboxes?
 			-- Also TODO: Find a nicer way to display this maybe?
-			obj.innerDistComps = getBoxyDistances(obj, racer.objPos, 0)
+			obj.innerDistComps = getBoxyDistances(obj, thing.objPos, 0)
 			obj.distance = obj.distanceComponents[4]
 		elseif obj.dynamicType == "cylinder" or obj.hitboxType == "cylinder2" then
-			obj.distanceComponents = getCylinderDistances(obj, racer.objPos, racer.objRadius)
+			obj.distanceComponents = getCylinderDistances(obj, thing.objPos, thing.objRadius)
 			obj.distance = obj.distanceComponents.d
 		else
-			local relative = Vector.subtract(racer.objPos, obj.objPos)
+			local relative = Vector.subtract(thing.objPos, obj.objPos)
 			obj.distance = math.sqrt(relative[1] * relative[1] + relative[2] * relative[2] + relative[3] * relative[3])
 		end
 	end
@@ -575,4 +614,6 @@ _export = {
 	isGhost = isGhost,
 	getBoxyPolygons = getBoxyPolygons,
 	mapObjTypes = mapObjTypes,
+	readObjects = readObjects,
+	getObjectDetails = getObjectDetails,
 }

@@ -79,6 +79,8 @@ local function readConfig()
 	return valuesRead
 end
 config = readConfig()
+-- Make a global copy for other files
+mkdsiConfig = config
 
 local bizhawkVersion = client.getversion()
 if string.sub(bizhawkVersion, 0, 3) == "2.9" then
@@ -238,7 +240,7 @@ local course = {}
 
 local triangles = nil
 
-local nearbyObjects = nil
+local allObjects = nil
 
 local checkpoints = {}
 
@@ -620,9 +622,8 @@ local function _mkdsinfo_run_data(isSameFrame)
 		end
 	end
 
-	local o = Objects.getNearbyObjects(focuedRacer, config.objectRenderDistance)
-	nearbyObjects = o[1]
-	focuedRacer.nearestObject = o[2]
+	allObjects = Objects.readObjects()
+	focuedRacer.nearestObject = Objects.getNearbyObjects(focuedRacer, config.objectRenderDistance)[2]
 
 	-- Ghost handling
 	if form.ghostInputs ~= nil then
@@ -683,7 +684,6 @@ local function _mkdsinfo_run_data(isSameFrame)
 	local drawingPackage = {
 		allRacers = allRacers,
 		allTriangles = triangles,
-		objects = nearbyObjects,
 		checkpoints = checkpoints,
 		paths = recordedPaths,
 		frame = raceFrame,
@@ -1037,15 +1037,20 @@ local function updateViewportBasic(viewport)
 			end
 		end
 		viewport.obj = nil
-	elseif viewport.objFocus ~= nil and nearbyObjects ~= nil then
-		for i = 1, #nearbyObjects do
-			if nearbyObjects[i].ptr == viewport.objFocus then
-				if viewport.frozen ~= true then viewport.location = nearbyObjects[i].objPos end
-				viewport.obj = nearbyObjects[i]
+	elseif viewport.objFocus ~= nil and allObjects ~= nil then
+		for _, obj in pairs(allObjects.list) do
+			if obj.skip == false and obj.ptr == viewport.objFocus then
+				if viewport.frozen ~= true then viewport.location = obj.objPos end
+				viewport.obj = obj
 				return
 			end
 		end
-		viewport.obj = nil
+		-- If the object disappears, can we just keep the old object?
+		--viewport.obj = nil
+		if viewport.obj ~= nil then
+			viewport.obj.ptr = 0
+			viewport.obj.skip = true
+		end
 	end
 end
 local function updateViewport(viewport)
@@ -1239,7 +1244,9 @@ local function watchRightClick()
 end
 
 local function shouldFocusOnObject(obj)
-	if obj.isMapObject then
+	if obj.skip == true then
+		return false
+	elseif obj.isMapObject then
 		return obj.hitboxType ~= "no hitbox"
 	elseif obj.isItem then
 		-- TODO: What type of item is it?
@@ -1247,11 +1254,11 @@ local function shouldFocusOnObject(obj)
 	end
 end
 local function nextObj(beginId, direction)
-	if nearbyObjects == nil then error("no objects list") end
-	local endId = #nearbyObjects
+	if allObjects == nil then error("no objects list") end
+	local endId = #allObjects.list
 	if direction == -1 then endId = 1 end
 	for i = beginId, endId, direction do
-		local obj = nearbyObjects[i]
+		local obj = allObjects.list[i]
 		if shouldFocusOnObject(obj) then
 			return obj
 		end
@@ -1259,7 +1266,7 @@ local function nextObj(beginId, direction)
 	return nil
 end
 local function focusClick(viewport, plusminus)
-	if nearbyObjects == nil then error("no objects list") end
+	if allObjects == nil then error("no objects list") end
 	if viewport.racerId ~= -1 then
 		if viewport.racerId == 0 and ((viewport.focusPreMovement == false) == (plusminus == 1)) and viewport.scale < 250 then
 			viewport.focusPreMovement = not viewport.focusPreMovement
@@ -1268,7 +1275,7 @@ local function focusClick(viewport, plusminus)
 			viewport.racerId = viewport.racerId + plusminus
 			if viewport.racerId == -1 or viewport.racerId == #allRacers + 1 then
 				local b = 1
-				if plusminus == -1 then b = #nearbyObjects end
+				if plusminus == -1 then b = #allObjects.list end
 				local obj = nextObj(b, plusminus)
 				viewport.racerId = -1
 				if obj ~= nil then
@@ -1276,26 +1283,30 @@ local function focusClick(viewport, plusminus)
 					forms.settext(viewport.focusLabel, obj.itemName or Objects.mapObjTypes[obj.typeId] or string.format("unk (%i)", obj.typeId))
 					redraw()
 					return
+				else
+					viewport.racerId = #allRacers - 1
 				end
-				viewport.racerId = #allRacers - 1
 			elseif viewport.racerId == 0 then
 				viewport.focusPreMovement = plusminus == -1 and viewport.scale < 250
 			end
 		end
 	else
 		local obj = nil
-		if #nearbyObjects ~= 0 then
-			-- Does our current focus object exist (nearby)?
+		if #allObjects.list ~= 0 then
+			-- Does our current focus object exist?
 			local currentId = nil
-			for i = 1, #nearbyObjects do
-				if nearbyObjects[i].ptr == viewport.objFocus then
-					currentId = i
+			for i = 1, #allObjects.list do
+				if allObjects.list[i].ptr == viewport.objFocus then
+					if allObjects.list[i].skip == false then					
+						currentId = i
+					end
+					break
 				end
 			end
 			if currentId == nil then
 				-- No.
 				currentId = 0
-				if plusminus < 0 then currentId = #nearbyObjects + 1 end
+				if plusminus < 0 then currentId = #allObjects.list + 1 end
 			end
 			obj = nextObj(currentId + plusminus, plusminus)
 		end
@@ -1977,6 +1988,7 @@ end
 -- GLOBAL
 function mkdsireload()
 	config = readConfig()
+	mkdsiConfig = config
 
 	mainCamera.renderAllTriangles = config.renderAllTriangles
 	mainCamera.backfaceCulling = config.backfaceCulling
