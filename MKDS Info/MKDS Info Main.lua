@@ -1513,14 +1513,14 @@ local function _changePerspective(cam)
 
 	if cam.box == nil then
 		redraw()
-	elseif cam.frozen ~= true then
+	else
 		if cam.perspectiveId == -6 then
 			local camData = getInGameCameraData()
 			cam.location = camData.location
 			cam.fovW = camData.fovW
 			cam.fovH = camData.fovH
 			Graphics.setPerspective(cam, camData.direction)
-		else
+		elseif cam.frozen ~= true then
 			cam.location = focuedRacer.objPos
 		end
 		redraw()
