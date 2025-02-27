@@ -88,6 +88,16 @@ local function multiply_r(v, s)
 		math.floor(v[3] * s / 0x1000 + 0.5),
 	}
 end
+--- @param v [integer, integer, integer]
+--- @param s integer
+--- @return [integer, integer, integer]
+local function multiply_t(v, s)
+	return {
+		v[1] * s // 0x1000,
+		v[2] * s // 0x1000,
+		v[3] * s // 0x1000,
+	}
+end
 
 --- @param v1 [integer, integer, integer]
 --- @param v2 [integer, integer, integer]
@@ -123,6 +133,7 @@ end
 --- @param v1 [number, number, number]
 --- @param v2 [number, number, number]
 local function equals(v1, v2)
+	--if v1 == nil or v2 == nil or v1[1] == nil or v2[1] == nil then print(debug.traceback()) end
 	if v1[1] == v2[1] and v1[2] == v2[2] and v1[3] == v2[3] then
 		return true
 	end
@@ -165,6 +176,7 @@ _export = {
 	crossProduct_float = crossProduct_float,
 	multiply = multiply,
 	multiply_r = multiply_r,
+	multiply_t = multiply_t,
 	add = add,
 	subtract = subtract,
 	truncate = truncate,

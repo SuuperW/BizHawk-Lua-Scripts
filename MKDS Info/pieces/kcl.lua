@@ -109,31 +109,35 @@ local function getNearbyTriangles(pos, extraRenderDistance)
 	
 	return nearby
 end
--- local function updateMinMax(current, new)
--- 	current.min[1] = math.min(current.min[1], new[1])
--- 	current.min[2] = math.min(current.min[2], new[2])
--- 	current.min[3] = math.min(current.min[3], new[3])
--- 	current.max[1] = math.max(current.max[1], new[1])
--- 	current.max[2] = math.max(current.max[2], new[2])
--- 	current.max[3] = math.max(current.max[3], new[3])
--- end
-local function someKindOfTransformation(a, d1, d2, v1, v2)
+local function updateMinMax(current, new)
+	current.min[1] = math.min(current.min[1], new[1])
+	current.min[2] = math.min(current.min[2], new[2])
+	current.min[3] = math.min(current.min[3], new[3])
+	current.max[1] = math.max(current.max[1], new[1])
+	current.max[2] = math.max(current.max[2], new[2])
+	current.max[3] = math.max(current.max[3], new[3])
+end
+local function someKindOfTransformation(a, d2, d1, v2, v1)
 	-- FUN_01fff434
-	local m = (mul_fx(a, d1) - d2) / (mul_fx(a, a) - 0x1000) * 0x1000
-	if a == 0x1000 or a == -0x1000 then
-		m = 1 -- NDS divide by zero returns 1?
+	local m = 0
+	if a ~= 0x1000 and a ~= -0x1000 then
+		m = math.floor((mul_fx(a, d1) - d2) / (mul_fx(a, a) - 0x1000) * 0x1000 + 0.5)
+	else
+		-- Divide by zero. NDS returns either 1 or -1.
+		-- MKDS will then round + bit shift (for fx32 precision reasons) and give 0.
 	end
 	local n = d1 - mul_fx(m, a)
 	
 	local out = Vector.add(
-		Vector.multiply(v2, m / 0x1000),
-		Vector.multiply(v1, n / 0x1000)
+		Vector.multiply_t(v2, m),
+		Vector.multiply_t(v1, n)
 	)
 	
 	return out
 end
 local function getSurfaceDistanceData(toucher, surface)
 	local data = {}
+	local radius = toucher.radius
 
 	local relativePos = Vector.subtract(toucher.pos, surface.vertex[1])
 	local previousPos = toucher.previousPos and Vector.subtract(toucher.previousPos, surface.vertex[1])
@@ -162,14 +166,15 @@ local function getSurfaceDistanceData(toucher, surface)
 	end
 	
 	data.distanceVector = Vector.multiply(surface.surfaceNormal, -upDistance / 0x1000)
-	local edgeDist
+	local edgeDistSq
 	local distanceOffset = nil
 	if planeDistances[1].d <= 0 then
 		-- fully inside
-		edgeDist = 0
+		edgeDistSq = 0
+		data.dist2d = 0
 		data.inside = true
 		data.nearestPointIsVertex = false
-		data.distance = math.max(0, math.abs(upDistance) - toucher.radius)
+		data.distance = math.max(0, math.abs(upDistance) - radius)
 	else
 		data.inside = false
 		-- Is the nearest point a vertex?
@@ -189,31 +194,33 @@ local function getSurfaceDistanceData(toucher, surface)
 			else
 				t = someKindOfTransformation(lmdp, planeDistances[2].d, planeDistances[1].d, m, b)
 			end
-			edgeDist = Vector.getMagnitude(t) * 0x1000
-			if edgeDist > 0 then
+			edgeDistSq = t[1] * t[1] + t[2] * t[2] + t[3] * t[3]
+			data.dist2d = math.sqrt(edgeDistSq)
+			if edgeDistSq > 0 then
 				distanceOffset = t
 			end
 		else
-			edgeDist = planeDistances[1].d
+			edgeDistSq = planeDistances[1].d
+			data.dist2d = edgeDistSq
+			edgeDistSq = edgeDistSq * edgeDistSq
 			distanceOffset = Vector.multiply(planeDistances[1].v, planeDistances[1].d / 0x1000)
 		end
 		
-		data.distance = math.max(0, math.sqrt(edgeDist * edgeDist + upDistance * upDistance) - toucher.radius)
+		data.distance = math.max(0, math.sqrt(edgeDistSq + upDistance * upDistance) - radius)
 	end
 	if data.distance == nil then error("nil distance to triangle!") end
-	data.dist2d = edgeDist
 	
 	if distanceOffset ~= nil then
 		data.distanceVector = Vector.subtract(data.distanceVector, distanceOffset)
 	end
-	if edgeDist > toucher.radius then
+	if data.dist2d > radius or planeDistances[1].d >= radius or inDistance < -radius then
 		data.pushOutBy = -1
 	else
-		data.pushOutBy = math.sqrt(toucher.radius * toucher.radius - edgeDist * edgeDist) - upDistance
+		data.pushOutBy = math.sqrt(radius * radius - edgeDistSq) - upDistance
 	end
 	
 	data.interacting = true -- NOT the same thing as getting pushed
-	if data.pushOutBy < 0 or toucher.radius - upDistance >= 0x1e001 then
+	if data.pushOutBy < 0 or radius - upDistance >= 0x1e001 then
 		data.interacting = false
 	elseif data.isBehind then
 		if previousPos == nil then
@@ -296,7 +303,7 @@ local function getTouchDataForSurface(toucher, surface)
 	return data
 end
 local function getCollisionDataForRacer(toucher)
-	local nearby = getNearbyTriangles(toucher.pos)
+	local nearby = getNearbyTriangles(toucher.pos, (mkdsiConfig.increaseRenderDistance and 3) or nil)
 	if #nearby == 0 then
 		return { all = {}, touched = {} }
 	end
