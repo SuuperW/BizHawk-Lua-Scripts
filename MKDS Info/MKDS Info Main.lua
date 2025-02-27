@@ -676,6 +676,20 @@ local function _mkdsinfo_run_data(isSameFrame)
 	end
 	allRacers = newRacers
 
+	-- TESTING
+	local toucher = {
+		pos = focuedRacer.objPos,
+		previousPos = focuedRacer.preMovementObjPos,
+		radius = focuedRacer.objRadius,
+		flags = 1, -- TODO: assume for now it is a racer
+	}
+	local cd = KCL.getCollisionDataForRacer(toucher)
+	if not Vector.equals(focuedRacer.collisionPush, cd.totalPush) and not Vector.equals(focuedRacer.basePosDelta, Vector.zero()) and frame == lastFrame + 1 then
+		print("mismatched KCL push")
+		print("KCL calculated", cd.totalPush)
+		print("position", focuedRacer.collisionPush)
+	end
+
 	-- Data not tied to a racer
 	raceData.framesMod8 = memory.read_s32_le(ptrRaceTimers + 0xC)
 	raceData.coinsBeingCollected = memory.read_s16_le(ptrMissionInfo + 0x8)

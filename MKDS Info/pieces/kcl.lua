@@ -305,7 +305,7 @@ end
 local function getCollisionDataForRacer(toucher)
 	local nearby = getNearbyTriangles(toucher.pos, (mkdsiConfig.increaseRenderDistance and 3) or nil)
 	if #nearby == 0 then
-		return { all = {}, touched = {} }
+		return { all = {}, touched = {}, totalPush = Vector.zero() }
 	end
 
 	local data = {}
@@ -318,6 +318,10 @@ local function getCollisionDataForRacer(toucher)
 	local touchedFloor = false
 	local skipEdgeWalls = false
 	local skipFloorVerticals = false
+
+	local totalFloor = { min = Vector.zero(), max = Vector.zero() }
+	local totalWall = { min = Vector.zero(), max = Vector.zero() }
+	local totalEdge = { min = Vector.zero(), max = Vector.zero() }
 	for i = 1, #nearby do
 		local touch = getTouchDataForSurface(toucher, nearby[i])
 		if touch.canTouch == true then
@@ -340,6 +344,16 @@ local function getCollisionDataForRacer(toucher)
 				end
 				touchedEdgeWall = touchedEdgeWall or triangle.collisionType == EDGE_WALL
 				touchedFloor = touchedFloor or triangle.isFloor
+
+				local pushDistance = math.floor(touch.pushOutDistance)
+				local pushVector = Vector.multiply_t(triangle.surfaceNormal, pushDistance)
+				if triangle.isFloor then
+					updateMinMax(totalFloor, pushVector)
+				elseif triangle.collisionType == EDGE_WALL then
+					updateMinMax(totalEdge, pushVector)
+				elseif triangle.isWall then
+					updateMinMax(totalWall, pushVector)
+				end
 			end
 			
 			-- find nearest wall/floor
@@ -375,12 +389,24 @@ local function getCollisionDataForRacer(toucher)
 	if maxPushOut ~= nil and skipFloorVerticals == false then
 		data[maxPushOut].controlsSlope = true
 	end
+
+	if not skipEdgeWalls then
+		updateMinMax(totalWall, totalEdge.min)
+		updateMinMax(totalWall, totalEdge.max)
+	end
+	if skipFloorVerticals then
+		totalFloor[2] = 0
+	end
+	updateMinMax(totalFloor, totalWall.min)
+	updateMinMax(totalFloor, totalWall.max)
+	local totalPush = Vector.add(totalFloor.min, totalFloor.max)
 	
 	return {
 		all = data,
 		touched = touchList,
 		nearestFloor = nearestFloor,
 		nearestWall = nearestWall,
+		totalPush = totalPush,
 	}
 end
 
