@@ -141,7 +141,7 @@ local shouldExit = false
 local redrawSeek = nil
 
 -- Some stuff
-local focuedRacer = nil
+local focusedRacer = nil
 
 local fakeGhostData = {}
 local fakeGhostExists = false
@@ -401,7 +401,7 @@ local function BlankRacerData()
 	for i = 1, 0x5a8 do z[i] = 0 end
 	return getRacerDetails(z, n, false)
 end
-focuedRacer = BlankRacerData()
+focusedRacer = BlankRacerData()
 
 local function getCheckpointData(dataObj)
 	if ptrCheckNum == 0 then
@@ -593,14 +593,14 @@ local function _mkdsinfo_run_data(isSameFrame)
 		if fakeGhostData[raceFrame] == nil then
 			focusedRacer = BlankRacerData()
 		else
-			focuedRacer = getRacerDetails(fakeGhostData[raceFrame], focuedRacer, isSameFrame)
-			focuedRacer.rawData = fakeGhostData[raceFrame]
+			focusedRacer = getRacerDetails(fakeGhostData[raceFrame], focusedRacer, isSameFrame)
+			focusedRacer.rawData = fakeGhostData[raceFrame]
 		end
 	else
 		local raw = gerRacerRawData(ptrRacerData + watchingId * 0x5a8)
-		focuedRacer = getRacerDetails(raw, focuedRacer, isSameFrame)
-		focuedRacer.ptr = ptrRacerData + watchingId * 0x5a8
-		focuedRacer.rawData = raw
+		focusedRacer = getRacerDetails(raw, focusedRacer, isSameFrame)
+		focusedRacer.ptr = ptrRacerData + watchingId * 0x5a8
+		focusedRacer.rawData = raw
 	end
 
 	local newRacers = {} -- needs new object so drawPackages can have multiple frames
@@ -608,22 +608,22 @@ local function _mkdsinfo_run_data(isSameFrame)
 		if i ~= watchingId then
 			newRacers[i] = getRacerBasicData(ptrRacerData + i * 0x5a8)
 		else
-			newRacers[i] = focuedRacer
+			newRacers[i] = focusedRacer
 		end
 		recordedPaths[i + 1].path[raceFrame] = newRacers[i].objPos
 	end
 	
 	if watchingId == 0 then
-		getCheckpointData(focuedRacer) -- This function only supports player.
+		getCheckpointData(focusedRacer) -- This function only supports player.
 
 		local ghostExists = racerCount >= 2 and Objects.isGhost(ptrRacerData + 0x5a8)
 		if ghostExists then
-			focuedRacer.ghost = newRacers[1]
+			focusedRacer.ghost = newRacers[1]
 		end
 	end
 
 	allObjects = Objects.readObjects()
-	focuedRacer.nearestObject = Objects.getNearbyObjects(focuedRacer, config.objectRenderDistance)[2]
+	focusedRacer.nearestObject = Objects.getNearbyObjects(focusedRacer, config.objectRenderDistance)[2]
 
 	-- Ghost handling
 	if form.ghostInputs ~= nil then
@@ -665,10 +665,10 @@ local function _mkdsinfo_run_data(isSameFrame)
 	fakeGhostExists = false
 	if not watchingFakeGhost then
 		if form.recordingFakeGhost then
-			fakeGhostData[raceFrame] = focuedRacer.rawData
+			fakeGhostData[raceFrame] = focusedRacer.rawData
 		end
 		if newRacers[racerCount] ~= nil then
-			focuedRacer.ghost = newRacers[racerCount]
+			focusedRacer.ghost = newRacers[racerCount]
 			fakeGhostExists = true
 		end
 	else
@@ -1129,8 +1129,8 @@ local function _mkdsinfo_run_draw(isInRace)
 	gui.cleartext()
 	if isInRace then
 		if config.showBottomScreenInfo then
-			drawInfoBottomScreen(focuedRacer)
-			drawItemInfo(focuedRacer)
+			drawInfoBottomScreen(focusedRacer)
+			drawItemInfo(focusedRacer)
 		end
 
 		-- If the main KCL view is not turned on, we want to show the 
@@ -1327,7 +1327,7 @@ end
 
 local function setComparisonPointClick()
 	if form.comparisonPoint == nil then
-		local pos = focuedRacer.basePos
+		local pos = focusedRacer.basePos
 		form.comparisonPoint = { pos[1], pos[2], pos[3] }
 		forms.settext(form.setComparisonPoint, "Clear comparison point")
 	else
@@ -1521,7 +1521,7 @@ local function _changePerspective(cam)
 			cam.fovH = camData.fovH
 			Graphics.setPerspective(cam, camData.direction)
 		elseif cam.frozen ~= true then
-			cam.location = focuedRacer.objPos
+			cam.location = focusedRacer.objPos
 		end
 		redraw()
 	end
@@ -1768,7 +1768,7 @@ local function recordPosition()
 		-- If we have an exact match, don't delete the whole thing.
 		local fakeGhostFrame = memory.read_s32_le(ptrRaceTimers + 4)
 		local ghost = fakeGhostData[fakeGhostFrame]
-		if ghost ~= nil and deepMatch(ghost, focuedRacer.rawData, 1) then
+		if ghost ~= nil and deepMatch(ghost, focusedRacer.rawData, 1) then
 			local count = #fakeGhostData
 			for i = fakeGhostFrame + 1, count do
 				fakeGhostData[i] = nil
