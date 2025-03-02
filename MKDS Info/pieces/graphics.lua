@@ -174,7 +174,7 @@ local function getDirectionsFrom2d(camera)
 	}
 end
 
-local PIXEL = 1 -- line, point, color
+local PIXEL = 1 -- pixel, point, color
 local CIRCLE = 2 -- circle, center, radius (2D), line, fill
 local LINE = 3 -- line, point1, point2, color
 local POLYGON = 4 -- polygon, verts, line, fill
@@ -272,7 +272,11 @@ local function processQue(camera)
 			end
 			
 			if #fp ~= 0 then
-				ops[opid] = { POLYGON, fp, lineColor, fill }
+				if #fp == 1 then
+					ops[opid] = { PIXEL, fp[1][1], fp[1][2], lineColor }
+				else
+					ops[opid] = { POLYGON, fp, lineColor, fill }
+				end
 				opid = opid + 1
 			end
 		end
