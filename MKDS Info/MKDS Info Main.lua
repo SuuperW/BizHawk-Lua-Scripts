@@ -549,6 +549,10 @@ end
 local function getInGameCameraData()
 	local cameraPtr = memory.read_u32_le(Memory.addrs.ptrCamera)
 	local camPos = read_pos(cameraPtr + 0x24)
+	-- CCB water!
+	local elevation = memory.read_s32_le(cameraPtr + 0x178)
+	camPos[2] = camPos[2] + elevation
+
 	local camTargetPos = read_pos(cameraPtr + 0x18)
 	local direction = Vector.subtract(camPos, camTargetPos)
 	direction = Vector.normalize_float(direction)
