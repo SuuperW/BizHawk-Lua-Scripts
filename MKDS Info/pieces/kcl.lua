@@ -442,7 +442,7 @@ local function getCourseCollisionData()
 		local tri = triangles[i]
 		tri.surfaceNormal = vectors[tri.surfaceNormalId]
 		tri.inVector = vectors[tri.inVectorId]
-		tri.vertex = {}
+		tri.vertex = {{}, {}, {}}
 		tri.slope = {}
 		tri.vertex[1] = vertexes[tri.vertexId]
 		tri.outVector = {}
@@ -453,26 +453,25 @@ local function getCourseCollisionData()
 		tri.slope[2] = Vector.crossProduct_float(tri.surfaceNormal, tri.outVector[2])
 		tri.slope[3] = Vector.crossProduct_float(tri.surfaceNormal, tri.outVector[3])
 		-- Both slope vectors should be unit vectors, since surfaceNormal and outVectors are.
+		tri.slope[1] = Vector.normalize_float(tri.slope[1])
+		tri.slope[2] = Vector.normalize_float(tri.slope[2])
+		tri.slope[3] = Vector.normalize_float(tri.slope[3])
 		-- But one of them is pointed the wrong way
 		tri.slope[1] = Vector.multiply(tri.slope[1], -1)
-		local a = Vector.dotProduct_float(vectors[tri.inVectorId], tri.slope[1])
-		local b = tri.triangleSize / a
-		if a == 0 then
-			-- This happens in rKB2.
-			b = 0x1000 * 1000
-			tri.ignore = true
+
+		local function computeVertex(slope)
+			local a = Vector.dotProduct_float(vectors[tri.inVectorId], slope)
+			local b = tri.triangleSize / a
+			if a == 0 then
+				-- This happens in rKB2.
+				b = 0x1000 * 1000
+				tri.ignore = true
+			end
+			local c = Vector.multiply(slope, b)
+			return Vector.add(tri.vertex[1], c)
 		end
-		local c = Vector.truncate(Vector.multiply(tri.slope[1], b))
-		tri.vertex[3] = Vector.add(tri.vertex[1], c)
-		a = Vector.dotProduct_float(vectors[tri.inVectorId], tri.slope[2])
-		b = tri.triangleSize / a
-		if a == 0 then
-			-- This happens in rKB2.
-			b = 0x1000 * 1000
-			tri.ignore = true
-		end
-		c = Vector.truncate(Vector.multiply(tri.slope[2], b))
-		tri.vertex[2] = Vector.add(tri.vertex[1], c)
+		tri.vertex[3] = computeVertex(tri.slope[1])
+		tri.vertex[2] = computeVertex(tri.slope[2])
 	end
 	
 	local cmPtr = get_u32(someCourseData, 0xC)
