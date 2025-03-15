@@ -165,7 +165,7 @@ local function getSurfaceDistanceData(toucher, surface)
 		end
 	end
 	
-	data.distanceVector = Vector.multiply(surface.surfaceNormal, -upDistance / 0x1000)
+	data.distanceVector = Vector.multiply_t(surface.surfaceNormal, -upDistance)
 	local edgeDistSq
 	local distanceOffset = nil
 	if planeDistances[1].d <= 0 then
@@ -203,7 +203,7 @@ local function getSurfaceDistanceData(toucher, surface)
 			edgeDistSq = planeDistances[1].d
 			data.dist2d = edgeDistSq
 			edgeDistSq = edgeDistSq * edgeDistSq
-			distanceOffset = Vector.multiply(planeDistances[1].v, planeDistances[1].d / 0x1000)
+			distanceOffset = Vector.multiply_t(planeDistances[1].v, -planeDistances[1].d)
 		end
 		
 		data.distance = math.max(0, math.sqrt(edgeDistSq + upDistance * upDistance) - radius)
@@ -211,7 +211,7 @@ local function getSurfaceDistanceData(toucher, surface)
 	if data.distance == nil then error("nil distance to triangle!") end
 	
 	if distanceOffset ~= nil then
-		data.distanceVector = Vector.subtract(data.distanceVector, distanceOffset)
+		data.distanceVector = Vector.add(data.distanceVector, distanceOffset)
 	end
 	if data.dist2d > radius or planeDistances[1].d >= radius or inDistance < -radius then
 		data.pushOutBy = -1
@@ -354,6 +354,7 @@ local function getCollisionDataForRacer(toucher)
 	
 	if touchedEdgeWall and touchedFloor then
 		local v = lowestTriangle.touch.centerToTriangle
+		v = { bit.arshift(v[1], 4), bit.arshift(v[2], 4), bit.arshift(v[3], 4) }
 		if v[1] * v[1] + v[3] * v[3] <= v[2] * v[2] then
 			-- Not allowed to touch edge walls.
 			skipEdgeWalls = true
