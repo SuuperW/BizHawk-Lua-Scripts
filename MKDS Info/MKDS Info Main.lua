@@ -383,11 +383,13 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	-- Item
 	local itemDataPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo + 0x210 * allData[0x74])
 	if itemDataPtr ~= 0 then
-		newData.roulleteItem = memory.read_u8(itemDataPtr + 0x2c)
-		newData.itemId = memory.read_u8(itemDataPtr + 0x4c)
-		newData.itemCount = memory.read_u8(itemDataPtr + 0x54)
-		newData.roulleteTimer = memory.read_u8(itemDataPtr + 0x20)
-		newData.roulleteState = memory.read_u8(itemDataPtr + 0x1C)
+		newData.roulleteItem = memory.read_u8(itemDataPtr + 0x10)
+		newData.itemId = memory.read_u8(itemDataPtr + 0x30)
+		newData.itemCount = memory.read_u8(itemDataPtr + 0x38)
+		newData.draggingType = memory.read_u8(itemDataPtr + 0x58)
+		newData.draggingId = memory.read_u8(itemDataPtr + 0x5c)
+		newData.roulleteTimer = memory.read_u8(itemDataPtr + 0x04)
+		newData.roulleteState = memory.read_u8(itemDataPtr + 0)
 	end
 	
 	return newData
@@ -636,8 +638,8 @@ local function _mkdsinfo_run_data(isSameFrame)
 	if config.giveGhostShrooms then
 		local itemPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo)
 		itemPtr = itemPtr + 0x210 -- ghost
-		memory.write_u8(itemPtr + 0x4c, 5) -- mushroom
-		memory.write_u8(itemPtr + 0x54, 3) -- count
+		memory.write_u8(itemPtr + 0x30, 5) -- mushroom
+		memory.write_u8(itemPtr + 0x38, 3) -- count
 	end
 	
 	if config.enableCameraFocusHack then

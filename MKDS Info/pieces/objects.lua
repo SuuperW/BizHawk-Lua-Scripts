@@ -236,6 +236,8 @@ local function getDetailsForBoxyObject(obj)
 			memory.read_s32_le(obj.ptr + 0xa0),
 			obj.objRadius,
 		}
+	elseif obj.hitboxFunc == Memory.hitboxFuncs.bully then
+		obj.sizes = read_pos(obj.ptr + 0x25c)
 	else
 		obj.sizes = read_pos(obj.ptr + 0x58)
 	end
@@ -337,6 +339,22 @@ local function getMapObjDetails(obj)
 					hitboxType = "spherical"
 					obj.multiBox = true
 					getDetailsForBoxyObject(obj)
+				end
+			elseif obj.hitboxFunc == Memory.hitboxFuncs.bully then
+				obj.objPos = read_pos(objPtr + 0x238)
+				obj.objRadius = memory.read_u32_le(objPtr + 0x25c)
+				obj.height = memory.read_u32_le(objPtr + 0x260)
+		
+				local hitboxMode = memory.read_u8(objPtr + 0x234)
+				-- non-spherical is not tested at all, Idk what uses them
+				if hitboxMode == 0 then
+					hitboxType = "spherical"
+				elseif hitboxMode == 1 then
+					hitboxType = "boxy"
+					getDetailsForBoxyObject(obj)
+				elseif hitboxMode == 2 then
+					hitboxType = "cylinder" -- 2?
+					obj.polygons = function() return getCylinderPolygons(obj.objPos, obj.orientation, obj.objRadius, obj.height, obj.height) end
 				end
 			else
 				hitboxType = hitboxType .. " " .. string.format("%x", obj.hitboxFunc)

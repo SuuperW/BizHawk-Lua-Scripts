@@ -9,7 +9,6 @@ local addrs = {
 	ptrRacerData = 0x0217ACF8 + ptrOffset,
 	ptrPlayerInputs = 0x02175630 + ptrOffset,
 	ptrGhostInputs = 0x0217568C + ptrOffset,
-	ptrItemInfo = 0x0217BC2C + ptrOffset,
 	ptrRaceTimers = 0x0217AA34 + ptrOffset,
 	ptrMissionInfo = 0x021A9B70 + ptrOffset,
 	ptrObjStuff = 0x0217B588 + ptrOffset,
@@ -25,6 +24,7 @@ local addrs = {
 	cameraThing = 0x207AA24 + ptrOffset,
 	ptrBattleController = 0x0217b1dc + ptrOffset,
 	ptrItemSets = 0x27e00cc, -- versions?
+	ptrItemInfo = memory.read_u32_le(0x020FA8A4 + ptrOffset), -- needs version testing
 }
 ---------------------------------------
 -- These have the same address in E and U versions.
@@ -35,6 +35,8 @@ local hitboxFuncs = {
 	clockHand = memory.read_u32_le(0x2159158),
 	pendulum = memory.read_u32_le(0x21592e8),
 	rockyWrench = memory.read_u32_le(0x2095fe8),
+	-- This one is in an overlay so it might not be loaded at whatever time we'd be reading.
+	bully = 0x21860ad,
 }
 ---------------------------------------
 
