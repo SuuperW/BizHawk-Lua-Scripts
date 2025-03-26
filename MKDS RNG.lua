@@ -1,4 +1,4 @@
-local maxChanges = 999 -- Set how many changes the script will check up to. If the game uses more than this many in one frame, the script will not work.
+local maxChanges = 9999 -- Set how many changes the script will check up to. If the game uses more than this many in one frame, the script will not work.
 local drawLocation = { x = 340, y = 360 }
 
 local enableRngHack = false -- Lets you hack RNG with touch inputs. (Y = 1, X = number of states to advance)
@@ -33,6 +33,7 @@ local race_status_ptr = memory.read_u32_le(0x21755FC)
 -- These names come from HaroohiPals. Idk what they mean.
 -- It seems like only "safeRng" is actually used.
 local safeRng = readRngContext(race_status_ptr + 0x47c)
+-- Oh, "randomRng" is actually used for the roullete. While it is spinning, the items that scroll through the view are random from randomRng.
 local randomRng = readRngContext(race_status_ptr + 0x498)
 local stableRng = readRngContext(race_status_ptr + 0x4b0)
 
