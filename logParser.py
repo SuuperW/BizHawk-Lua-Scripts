@@ -116,7 +116,13 @@ class LogEntry:
 			else:
 				# The operand must be a register?
 				second_name = operands[1].lower()
+				# It can be negative!
+				isNegative = second_name[0] == '-'
+				if isNegative:
+					second_name = second_name[1:]
 				second_value = value_of_register(log_string, second_name)
+				if isNegative:
+					second_value = -second_value
 				if len(operands) == 2:
 					offset = second_value
 				elif operands[2].startswith('lsl') or operands[2].startswith('asl'):
