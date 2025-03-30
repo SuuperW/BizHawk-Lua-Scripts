@@ -501,7 +501,7 @@ local function drawTriangle(tri, d, racer, dotSize, viewport)
 	-- lines and dots
 	local color, priority = "white", 0
 	if tri.isWall then
-		if touchData.touching and touchData.push then
+		if touchData.touching and touchData.push and not touchData.skipByEdge then
 			color, priority = "yellow", 2
 		else
 			color, priority = "orange", 1
