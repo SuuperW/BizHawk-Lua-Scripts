@@ -1778,9 +1778,11 @@ local function recordPosition()
 			local count = #fakeGhostData
 			for i = fakeGhostFrame + 1, count do
 				fakeGhostData[i] = nil
+				recordedPaths[racerCount + 1].path[i] = nil
 			end
 		else
 			fakeGhostData = {}
+			recordedPaths[racerCount + 1].path = {}
 		end
 		forms.settext(form.recordPositionButton, "Stop recording")
 	else
@@ -1850,10 +1852,6 @@ local function _mkdsinfo_setup()
 	end)
 	MKDS_INFO_FORM_HANDLES[form.handle] = true
 	local borderHeight = forms.getproperty(form.handle, "Height") + 0 - noKclHeight
-
-	-- Fake ghost
-	forms.setproperty(form.handle, "FormBorderStyle", "Sizable")
-	form.recordPositionButton = forms.button(form.handle, "Record fake ghost", recordPosition, 324, 20, 140, 23)
 	
 	local buttonMargin = 5
 	local labelMargin = 2
@@ -1890,17 +1888,26 @@ local function _mkdsinfo_setup()
 	)
 	form.ghostInputHackButton = temp
 	
-	temp = forms.button(
-		form.handle, "Load bk2m", loadGhostClick,
-		forms.getproperty(temp, "Right") + labelMargin, y,
-		70, 23
+	if false then
+		-- Removing these from the UI, they don't see much use.
+		temp = forms.button(
+			form.handle, "Load bk2m", loadGhostClick,
+			forms.getproperty(temp, "Right") + labelMargin, y,
+			70, 23
+		)
+		temp = forms.button(
+			form.handle, "Save bk2m", saveCurrentInputsClick,
+			forms.getproperty(temp, "Right") + labelMargin, y,
+			70, 23
+		)
+		-- I also want a save-to-bk2m at some point. Although BizHawk doesn't expose a file open function (Lua can still write to files, we just don't have a nice way to let the user choose a save location.) so we might instead copy input to the current movie and let the user save as bk2m manually.
+	end
+	-- Fake ghost
+	form.recordPositionButton = forms.button(
+		form.handle, "Record fake ghost", recordPosition,
+		forms.getproperty(temp, "Right") + labelMargin*2, y,
+		110, 23
 	)
-	temp = forms.button(
-		form.handle, "Save bk2m", saveCurrentInputsClick,
-		forms.getproperty(temp, "Right") + labelMargin, y,
-		70, 23
-	)
-	-- I also want a save-to-bk2m at some point. Although BizHawk doesn't expose a file open function (Lua can still write to files, we just don't have a nice way to let the user choose a save location.) so we might instead copy input to the current movie and let the user save as bk2m manually.
 
 	y = y + 28
 	form.drawUnpausedButton = forms.button(
