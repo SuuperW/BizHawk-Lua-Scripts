@@ -162,8 +162,8 @@ local function contains(list, x)
 	return false
 end
 local function deepMatch(t1, t2, maxDepth)
-	if maxDepth == 0 then return true end
 	if type(t1) ~= "table" or type(t2) ~= "table" then return t1 == t2 end
+	if maxDepth == 0 then return true end
 	local pairsChecked = {}
 	for k, v in pairs(t1) do
 		if not deepMatch(t2[k], v, maxDepth - 1) then return false end
