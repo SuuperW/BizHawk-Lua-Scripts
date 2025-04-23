@@ -30,6 +30,7 @@ local config = {
 }
 
 local optionsFromFile = {}
+local needConfig = false
 local function writeConfig(exclude)
 	configFile = io.open("MKDS_Info_Config.txt", "a")
 	if configFile == nil then error("could not write config") end
@@ -1950,6 +1951,21 @@ end
 local hasClosed = false
 
 -- BizHawk ----------------------------
+local function reloadConfig()
+	config = readConfig()
+	mkdsiConfig = config
+
+	mainCamera.renderAllTriangles = config.renderAllTriangles
+	mainCamera.backfaceCulling = config.backfaceCulling
+	mainCamera.renderHitboxesWhenFakeGhost = config.renderHitboxesWhenFakeGhost
+	for i = 1, #viewports do
+		viewports[i].renderAllTriangles = config.renderAllTriangles
+		viewports[i].backfaceCulling = config.backfaceCulling
+	end
+
+	updateDrawingRegions(mainCamera)
+end
+
 memory.usememorydomain("ARM9 System Bus")
 
 local function main()
@@ -1985,8 +2001,12 @@ local function main()
 		else
 			emu.frameadvance()
 		end
+
+		if needConfig then
+			reloadConfig()
+		end
 	end
-	if not hasClosed then _mkdsinfo_close() end	
+	if not hasClosed then _mkdsinfo_close() end
 end
 
 gui.clearGraphics("client")
@@ -2000,19 +2020,11 @@ end
 
 -- GLOBAL
 function mkdsireload()
-	config = readConfig()
-	mkdsiConfig = config
-
-	mainCamera.renderAllTriangles = config.renderAllTriangles
-	mainCamera.backfaceCulling = config.backfaceCulling
-	mainCamera.renderHitboxesWhenFakeGhost = config.renderHitboxesWhenFakeGhost
-	for i = 1, #viewports do
-		viewports[i].renderAllTriangles = config.renderAllTriangles
-		viewports[i].backfaceCulling = config.backfaceCulling
-	end
-
-	updateDrawingRegions(mainCamera)
-	redraw()
+	-- This function is meant to be run manually from the Lua console.
+	-- However this means the current directory won't be for this script!
+	--     (I swear it was working back when I first wrote this fucntion, though...)
+	-- So we have to wait until the next frame to actually read the file.
+	needConfig = true
 end
 
 main()
