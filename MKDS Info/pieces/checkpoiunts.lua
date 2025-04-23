@@ -3,10 +3,10 @@ local Memory = _imports.Memory
 local checkpointSize = 0x24;
 
 local function getCheckpoints()
-	local ptrCheckData = memory.read_s32_le(Memory.addrs.ptrCheckData)
-	local totalcheckpoints = memory.read_u16_le(ptrCheckData + 0x48)
+	local ptrMapData = memory.read_s32_le(Memory.addrs.ptrMapData)
+	local totalcheckpoints = memory.read_u16_le(ptrMapData + 0x48)
 	if totalcheckpoints == 0 then return { count = 0 } end
-	local chkAddr = memory.read_u32_le(ptrCheckData + 0x44)
+	local chkAddr = memory.read_u32_le(ptrMapData + 0x44)
 
 	local checkpointData = memory.read_bytes_as_array(chkAddr + 1, totalcheckpoints * checkpointSize)
 	checkpointData[0] = memory.read_u8(chkAddr)
@@ -32,8 +32,8 @@ local function getCheckpoints()
 	checkpoints[0].isFinish = true
 	checkpoints.count = totalcheckpoints
 
-	local pathsAddr = memory.read_u32_le(ptrCheckData + 0x4c)
-	local pathsCount = memory.read_u32_le(ptrCheckData + 0x50)
+	local pathsAddr = memory.read_u32_le(ptrMapData + 0x4c)
+	local pathsCount = memory.read_u32_le(ptrMapData + 0x50)
 	local pathSize = 0xC
 	local pathsData = memory.read_bytes_as_array(pathsAddr + 1, pathsCount * pathSize - 1)
 	pathsData[0] = memory.read_u8(pathsAddr)

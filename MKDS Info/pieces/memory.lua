@@ -7,24 +7,23 @@ local ptrOffset = somePointerWithRegionAgnosticAddress - valueForUSVersion
 -- Base addresses are valid for the US Version
 local addrs = {
 	ptrRacerData = 0x0217ACF8 + ptrOffset,
-	ptrPlayerInputs = 0x02175630 + ptrOffset,
-	ptrGhostInputs = 0x0217568C + ptrOffset,
+	ptrRacerInputs = 0x02175630 + ptrOffset,
 	ptrRaceTimers = 0x0217AA34 + ptrOffset,
 	ptrMissionInfo = 0x021A9B70 + ptrOffset,
 	ptrObjStuff = 0x0217B588 + ptrOffset,
 	racerCount = 0x0217ACF4 + ptrOffset,
-	ptrSomeRaceData = 0x021759A0 + ptrOffset,
-	ptrCheckNum = 0x021755FC + ptrOffset,
-	ptrCheckData = 0x02175600 + ptrOffset,
+	ptrRaceMultiConfig = 0x021759A0 + ptrOffset,
+	ptrRaceStatus = 0x021755FC + ptrOffset,
+	ptrMapData = 0x02175600 + ptrOffset,
 	ptrScoreCounters = 0x0217ACFC + ptrOffset,
-	collisionData = 0x0217b5f4 + ptrOffset,
-	ptrCurrentCourse = 0x23cdcd8 + ptrOffset,
+	collisionData = 0x0217B5F4 + ptrOffset,
 	ptrCamera = 0x217AA4C + ptrOffset,
 	ptrVisibilityStuff = 0x217AE90 + ptrOffset,
-	cameraThing = 0x207AA24 + ptrOffset,
-	ptrBattleController = 0x0217b1dc + ptrOffset,
-	ptrItemSets = 0x27e00cc, -- versions?
+	ptrBattleController = 0x0217B1DC + ptrOffset,
 	ptrItemInfo = memory.read_u32_le(0x020FA8A4 + ptrOffset), -- needs version testing
+	-- Code and DTCM, will not have the same ptrOffset. (E and U versions are the same)
+	camHackCodeAddr = 0x207AA24,
+	ptrItemSets = 0x27E00CC,
 }
 ---------------------------------------
 -- These have the same address in E and U versions.

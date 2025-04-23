@@ -246,7 +246,7 @@ local allObjects = nil
 local checkpoints = {}
 
 local ptrRacerData = nil
-local ptrCheckNum = nil
+local ptrRaceStatus = nil
 local ptrRaceTimers = nil
 local ptrMissionInfo = nil
 
@@ -407,31 +407,31 @@ end
 focusedRacer = BlankRacerData()
 
 local function getCheckpointData(dataObj)
-	if ptrCheckNum == 0 then
+	if ptrRaceStatus == 0 then
 		return
 	end
 	
 	-- Read checkpoint values
-	dataObj.checkpoint = memory.read_u8(ptrCheckNum + 0x46)
-	dataObj.keyCheckpoint = memory.read_s8(ptrCheckNum + 0x48)
-	dataObj.checkpointGhost = memory.read_s8(ptrCheckNum + 0xD2)
-	dataObj.keyCheckpointGhost = memory.read_s8(ptrCheckNum + 0xD4)
-	dataObj.lap = memory.read_s8(ptrCheckNum + 0x38)
+	dataObj.checkpoint = memory.read_u8(ptrRaceStatus + 0x46)
+	dataObj.keyCheckpoint = memory.read_s8(ptrRaceStatus + 0x48)
+	dataObj.checkpointGhost = memory.read_s8(ptrRaceStatus + 0xD2)
+	dataObj.keyCheckpointGhost = memory.read_s8(ptrRaceStatus + 0xD4)
+	dataObj.lap = memory.read_s8(ptrRaceStatus + 0x38)
 	
 	-- Lap time
-	dataObj.lap_f = memory.read_s32_le(ptrCheckNum + 0x18) * 1.0 / 60 - 0.05
+	dataObj.lap_f = memory.read_s32_le(ptrRaceStatus + 0x18) * 1.0 / 60 - 0.05
 	if (dataObj.lap_f < 0) then dataObj.lap_f = 0 end
 end
 
 local function setGhostInputs(form)
-	local ptr = memory.read_s32_le(Memory.addrs.ptrGhostInputs)
+	local ptr = memory.read_s32_le(Memory.addrs.ptrRacerInputs + 0x5c)
 	if ptr == 0 then error("How are you here?") end
 	
 	local currentInputs = memory.read_bytes_as_array(ptr, 0xdce)
 	memory.write_bytes_as_array(ptr, form.ghostInputs)
 	memory.write_s32_le(ptr, 1765) -- max input count for ghost
 	-- lap times
-	ptr = memory.read_s32_le(Memory.addrs.ptrSomeRaceData)
+	ptr = memory.read_s32_le(Memory.addrs.ptrRaceMultiConfig)
 	memory.write_bytes_as_array(ptr + 0x3ec, form.ghostLapTimes)
 	
 	-- This frame's state won't have it, but any future state will.
@@ -495,7 +495,7 @@ end
 local function getCourseData()
 	-- Read pointer values
 	ptrRacerData = memory.read_s32_le(Memory.addrs.ptrRacerData)
-	ptrCheckNum = memory.read_s32_le(Memory.addrs.ptrCheckNum)
+	ptrRaceStatus = memory.read_s32_le(Memory.addrs.ptrRaceStatus)
 	ptrRaceTimers = memory.read_s32_le(Memory.addrs.ptrRaceTimers)
 	ptrMissionInfo = memory.read_s32_le(Memory.addrs.ptrMissionInfo)
 
@@ -530,7 +530,8 @@ local function inRace()
 		clearDataOutsideRace()
 		return false
 	end
-	local currentCourseId = memory.read_u8(Memory.addrs.ptrCurrentCourse)
+	local raceConfig = memory.read_u32_le(Memory.addrs.ptrRaceMultiConfig)
+	local currentCourseId = memory.read_u8(raceConfig)
 	if currentCourseId ~= course.id or currentRacersPtr ~= course.racersPtr or math.abs(frame - timer - course.frame) > 1 then
 		-- The timer update is on the boundary of frames (so we check +/- > 1)
 		course.id = currentCourseId
@@ -644,10 +645,10 @@ local function _mkdsinfo_run_data(isSameFrame)
 	end
 	
 	if config.enableCameraFocusHack then
-		local raceThing = memory.read_u32_le(Memory.addrs.ptrSomeRaceData)
+		local raceThing = memory.read_u32_le(Memory.addrs.ptrRaceMultiConfig)
 		memory.write_u8(raceThing + 0x62, watchingId)
 		memory.write_u8(raceThing + 0x63, watchingId)
-		local somethingPtr = memory.read_u32_le(Memory.addrs.ptrCheckNum)
+		local somethingPtr = memory.read_u32_le(Memory.addrs.ptrRaceStatus)
 		memory.write_u32_le(somethingPtr + 0x4f0, 0)
 		-- Visibility
 		local racer = ptrRacerData + 0x5a8 * watchingId
@@ -661,7 +662,7 @@ local function _mkdsinfo_run_data(isSameFrame)
 		-- Wheels: Only way I know how is code hack.
 		local value = 0
 		if watchingId == 0 then value = 1 end
-		memory.write_u8(Memory.addrs.cameraThing, value)
+		memory.write_u8(Memory.addrs.camHackCodeAddr, value)
 	end
 
 	-- FAKE ghost
@@ -1210,9 +1211,9 @@ local function useInputsClick()
 	end
 	
 	if form.ghostInputs == nil then
-		form.ghostInputs = memory.read_bytes_as_array(memory.read_s32_le(Memory.addrs.ptrPlayerInputs), 0xdce) -- 0x8ace)
+		form.ghostInputs = memory.read_bytes_as_array(memory.read_s32_le(Memory.addrs.ptrRacerInputs), 0xdce)
 		form.firstGhostInputFrame = frame - memory.read_s32_le(memory.read_s32_le(Memory.addrs.ptrRaceTimers) + 4) + 121
-		form.ghostLapTimes = memory.read_bytes_as_array(memory.read_s32_le(Memory.addrs.ptrCheckNum) + 0x20, 0x4 * 5)
+		form.ghostLapTimes = memory.read_bytes_as_array(memory.read_s32_le(Memory.addrs.ptrRaceStatus) + 0x20, 0x4 * 5)
 		setGhostInputs(form)
 		forms.settext(form.ghostInputHackButton, "input hack active")
 	else
@@ -1808,7 +1809,7 @@ local function _mkdsinfo_close()
 	
 	-- Undo camera hack
 	if watchingId ~= 0 and inRace() then
-		local raceThing = memory.read_u32_le(Memory.addrs.ptrSomeRaceData)
+		local raceThing = memory.read_u32_le(Memory.addrs.ptrRaceMultiConfig)
 		memory.write_u8(raceThing + 0x62, 0)
 		memory.write_u8(raceThing + 0x63, 0)
 	end
