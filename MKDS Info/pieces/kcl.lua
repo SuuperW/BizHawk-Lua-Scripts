@@ -392,6 +392,7 @@ local function getCourseCollisionData()
 
 	local dataPtr = get_u32(someCourseData, 8)
 	local endData = get_u32(someCourseData, 12)
+	if (endData - dataPtr) > 0x10000 then error("kcl data too big") end
 	local triangleData = memory.read_bytes_as_array(dataPtr + 1, endData - dataPtr)
 	triangleData[0] = memory.read_u8(dataPtr)
 	
@@ -420,6 +421,7 @@ local function getCourseCollisionData()
 	end
 		
 	local vectorsPtr = get_u32(someCourseData, 4)
+	if (dataPtr - vectorsPtr + 0x10 > 0x10000) then error("invalid kcl data at vectors") end
 	local vectorData = memory.read_bytes_as_array(vectorsPtr + 1, dataPtr - vectorsPtr + 0x10)
 	vectorData[0] = memory.read_u8(vectorsPtr)
 	local vectors = {}
@@ -430,6 +432,7 @@ local function getCourseCollisionData()
 	end
 	
 	local vertexesPtr = get_u32(someCourseData, 0)
+	if (vectorsPtr - vertexesPtr > 0x10000) then error("invalid kcl data at vertexes") end
 	local vertexData = memory.read_bytes_as_array(vertexesPtr + 1, vectorsPtr - vertexesPtr) -- guess about length
 	vertexData[0] = memory.read_u8(vertexesPtr)
 	local vertexes = {}
