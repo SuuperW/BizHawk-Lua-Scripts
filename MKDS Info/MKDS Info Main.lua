@@ -2005,6 +2005,7 @@ local function main()
 
 		if needConfig then
 			reloadConfig()
+			needConfig = false
 		end
 	end
 	if not hasClosed then _mkdsinfo_close() end
