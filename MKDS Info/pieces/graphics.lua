@@ -308,6 +308,7 @@ local function processQue(camera)
 						local smallsize = 300
 						radius = scaleAtDistance(object.objPos, smallsize, camera)
 						makeCircle(point2D, radius, color, color & 0x3fffffff)
+						makeCircle(point2D, radius / 10, color, color & 0x0fffffff)
 						radius = scaleAtDistance(object.objPos, 1, camera)
 						makeCircle(point2D, radius, color, color)
 						if object.preMovementObjPos ~= nil then
@@ -318,6 +319,7 @@ local function processQue(camera)
 							end
 							radius = scaleAtDistance(object.objPos, smallsize, camera)
 							makeCircle(point2D, radius, color, color & 0x3fffffff)
+							makeCircle(point2D, radius / 10, color, color & 0x0fffffff)
 							radius = scaleAtDistance(object.objPos, 1, camera)
 							makeCircle(point2D, radius, color, color)
 						end
