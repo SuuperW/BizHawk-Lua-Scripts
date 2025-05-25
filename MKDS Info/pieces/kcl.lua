@@ -8,6 +8,7 @@ local get_s16 = Memory.get_s16
 local get_pos_16 = Memory.get_pos_16
 
 local someCourseData = nil
+local collisionMap = {}
 
 local function mul_fx(a, b)
 	return a * b // 0x1000
@@ -417,7 +418,7 @@ local function getCourseCollisionData()
 		triangles[i].isFloor = triangles[i].props & 0x1e34ef ~= 0
 		triangles[i].isOob = triangles[i].props & 0xC00 ~= 0
 
-		triangles[i].skip = triangles[i].isActuallyLine or (1 << triangles[i].collisionType) & skippableTypes ~= 0
+		triangles[i].skip = (1 << triangles[i].collisionType) & skippableTypes ~= 0
 	end
 		
 	local vectorsPtr = get_u32(someCourseData, 4)
@@ -466,9 +467,10 @@ local function getCourseCollisionData()
 		local function computeVertex(slope)
 			local a = Vector.dotProduct_float(vectors[tri.inVectorId], slope)
 			local b = tri.triangleSize / a
-			if a == 0 then
+			if math.abs(a) < 1e-10 then
 				-- This happens in rKB2.
 				b = 0x1000 * 1000
+				tri.skip = true
 				tri.ignore = true
 			end
 			local c = Vector.multiply(slope, b)
