@@ -1549,7 +1549,7 @@ local function changePerspectiveLeft(cam)
 		local nextId = 0
 		for i = 1, #tris do
 			local ti = tris[i].id
-			if ti < id and ti > nextId then
+			if ti <= id and ti > nextId then
 				if not Vector.equals(cam.rotationVector, tris[i].surfaceNormal) then
 					nextId = ti
 				end
