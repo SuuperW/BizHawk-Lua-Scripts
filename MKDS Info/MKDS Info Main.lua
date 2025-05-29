@@ -1291,8 +1291,10 @@ local function focusClick(viewport, plusminus)
 					forms.settext(viewport.focusLabel, obj.itemName or Objects.mapObjTypes[obj.typeId] or string.format("unk (%i)", obj.typeId))
 					redraw()
 					return
-				else
+				elseif #allRacers > 0 then
 					viewport.racerId = #allRacers - 1
+				else
+					viewport.racerId = 0
 				end
 			elseif viewport.racerId == 0 then
 				viewport.focusPreMovement = plusminus == -1 and viewport.scale < 250
