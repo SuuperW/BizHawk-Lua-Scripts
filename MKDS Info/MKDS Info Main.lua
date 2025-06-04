@@ -21,7 +21,7 @@ local config = {
 	backfaceCulling = true, -- Do not show triangles that are facing away from the camera
 	renderHitboxesWhenFakeGhost = false, -- Render your hitbox and that of the fake ghost, when a fake ghost exists, on the main screen, when the main camera is off.
 	-- behavior
-	alertOnRewindAfterBranch = true, -- BizHawk simply does not support nice seeking behavior, so we can't do it for you.
+	alertOnRewindAfterBranch = true,
 	showBizHawkDumbnessWarning = true,
 
 	-- hacks: use these with caution as they can desync a movie or mess up state hisotry
