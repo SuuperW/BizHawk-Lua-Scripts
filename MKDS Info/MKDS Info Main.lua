@@ -9,7 +9,6 @@ local config = {
 	-- display options
 	defaultScale = 0.8, -- big = zoom out
 	drawOnLeftSide = true, -- if the window is wide, keep on-screend stuff on the left edge
-	useIntegerScale = false, -- Is EmuHawk configured to only scale the game by integer scale factors? (Pulling this info automatically is too hard. False is EmuHawk default.)
 	increaseRenderDistance = false, -- true to draw triangels far away (laggy)
 	renderAllTriangles = false,
 	objectRenderDistance = 600,
@@ -974,52 +973,49 @@ local viewports = {}
 local originalPadding = nil
 
 local function updateDrawingRegions(camera)
-	local clientWidth = client.screenwidth()
-	local clientHeight = client.screenheight()
+	-- transform point does touch-screen coordinate logic
+	-- so we can only get coordinates for bottom screen
+	local topLeft_bottom = client.transformPoint(0, 0)	
+	local bottomRight_bottom = client.transformPoint(256, 192)
+	-- but we can try to guess the top screen with these
 	local layout = nds.getscreenlayout()
 	local gap = nds.getscreengap()
-	--local invert = nds.getscreeninvert()
-	local gameBaseWidth = nil
-	local gameBaseHeight = nil
-	if layout == "Natural" then
-		-- We do not support rotated screens. Assume vertical.
-		layout = "Vertical"
-	end
-	if layout == "Vertical" then
-		gameBaseWidth = 256
-		gameBaseHeight = 192 * 2 + gap
-	elseif layout == "Horizontal" then
-		gameBaseWidth = 256 * 2
-		gameBaseHeight = 192
+	local topLeft_top = {}
+	if layout == "Horizontal" then
+		topLeft_top = {
+			x = topLeft_bottom.x - (bottomRight_bottom.x - topLeft_bottom.x) - gap,
+			y = topLeft_bottom.y,
+		}
 	else
-		gameBaseWidth = 256
-		gameBaseHeight = 192
+		topLeft_top = {
+			x = topLeft_bottom.x,
+			y = topLeft_bottom.y - (bottomRight_bottom.y - topLeft_bottom.y) - gap,
+		}
 	end
-	local gameScale = math.min(clientWidth / gameBaseWidth, clientHeight / gameBaseHeight)
-	if config.useIntegerScale then gameScale = math.floor(gameScale) end
+	local bottomRight_top = {
+		x = topLeft_top.x + (bottomRight_bottom.x - topLeft_bottom.x),
+		y = topLeft_top.y + (bottomRight_bottom.y - topLeft_bottom.y),
+	}
+
+	-- From those we can easily construct our views' coordinates + sizes
 	local colView = {
-		w = 0.5 * 256 * gameScale,
-		h = 0.5 * 192 * gameScale,
+		w = 0.5 * (bottomRight_top.x - topLeft_top.x),
+		h = 0.5 * (bottomRight_top.y - topLeft_top.y),
 	}
-	colView.x = (clientWidth - gameBaseWidth * gameScale) * 0.5 + colView.w
-	colView.y = (clientHeight - gameBaseHeight * gameScale) * 0.5 + colView.h
+	colView.x = topLeft_top.x + colView.w
+	colView.y = topLeft_top.y + colView.h
 	iView = {
-		x = (clientWidth - (gameBaseWidth * gameScale)) * 0.5,
-		y = (clientHeight - (gameBaseHeight * gameScale)) * 0.5,
-		w = 256 * gameScale,
-		h = 192 * gameScale,
+		x = topLeft_bottom.x,
+		y = topLeft_bottom.y,
+		w = bottomRight_bottom.x - topLeft_bottom.x,
+		h = bottomRight_bottom.y - topLeft_bottom.y,
 	}
+
 	if layout ~= "Horizontal" then
 		if config.drawOnLeftSide == true then
 			-- People who use wide window (black space to the side of game screen) tell me they prefer info to be displayed on the left rather than over the bottom screen.
 			iView.x = 0
-			if mainCamera.overlay == false then
-				colView.x = colView.w
-			end
 		end
-		iView.y = iView.y + (192 + gap) * gameScale
-	else
-		iView.x = iView.x + 256 * gameScale
 	end
 
 	camera.x = colView.x
