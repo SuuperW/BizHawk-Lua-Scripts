@@ -1590,6 +1590,11 @@ local function changePerspectiveRight(cam)
 	_changePerspective(cam)
 end
 
+local displayScale -- windows/bizhawk silliness, not sure which one
+local function getRight(control)
+	return forms.getproperty(control, "Right") / displayScale
+end
+
 local function makeCollisionControls(kclForm, viewport, x, y)
 	local labelMargin = 2
 	local baseY = y
@@ -1599,15 +1604,15 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 	forms.setproperty(temp, "AutoSize", true)
 	temp = forms.button(
 		kclForm, "+", function() zoomInClick(viewport) end,
-		forms.getproperty(temp, "Right") + labelMargin, y,
+		getRight(temp) + labelMargin, y,
 		23, 23
 	)
 	temp = forms.button(
 		kclForm, "-", function() zoomOutClick(viewport) end,
-		forms.getproperty(temp, "Right") + labelMargin, y,
+		getRight(temp) + labelMargin, y,
 		23, 23
 	)
-	temp = forms.checkbox(kclForm, "freeze location", forms.getproperty(temp, "Right") + labelMargin, y + 4)
+	temp = forms.checkbox(kclForm, "freeze location", getRight(temp) + labelMargin, y + 4)
 	forms.setproperty(temp, "AutoSize", true)
 	forms.addclick(temp, function()
 		viewport.frozen = not viewport.frozen
@@ -1625,20 +1630,20 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 	forms.setproperty(temp, "AutoSize", true)
 	temp = forms.button(
 		kclForm, "<", function() changePerspectiveLeft(viewport) end,
-		forms.getproperty(temp, "Right") + labelMargin*2, y,
+		getRight(temp) + labelMargin*2, y,
 		18, 23
 	)
 	viewport.perspectiveLabel = forms.label(
 		kclForm, "top down",
-		forms.getproperty(temp, "Right") + labelMargin*2, y + 4
+		getRight(temp) + labelMargin*2, y + 4
 	)
 	forms.setproperty(viewport.perspectiveLabel, "AutoSize", true)
 	temp = forms.button(
 		kclForm, ">", function() changePerspectiveRight(viewport) end,
-		forms.getproperty(viewport.perspectiveLabel, "Right") + 38, y,
+		getRight(viewport.perspectiveLabel) + 38, y,
 		18, 23
 	)
-	local rightmost = forms.getproperty(temp, "Right") + 0
+	local rightmost = getRight(temp) + 0
 	y = y + 26
 	temp = forms.label(
 		kclForm, "Focus on:",
@@ -1647,17 +1652,17 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 	forms.setproperty(temp, "AutoSize", true)
 	temp = forms.button(
 		kclForm, "<", function() focusClick(viewport, -1) end,
-		forms.getproperty(temp, "Right") + labelMargin*2, y,
+		getRight(temp) + labelMargin*2, y,
 		18, 23
 	)
 	viewport.focusLabel = forms.label(
 		kclForm, "racer 0",
-		forms.getproperty(temp, "Right") + labelMargin*2, y + 4
+		getRight(temp) + labelMargin*2, y + 4
 	)
 	forms.setproperty(viewport.focusLabel, "AutoSize", true)
 	temp = forms.button(
 		kclForm, ">", function() focusClick(viewport, 1) end,
-		forms.getproperty(viewport.focusLabel, "Left") + 102, y,
+		forms.getproperty(viewport.focusLabel, "Left") / displayScale + 102, y,
 		18, 23
 	)
 
@@ -1666,7 +1671,7 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 	x = rightmost - 10
 	temp = forms.label(kclForm, "Draw:", x, y)
 	forms.setproperty(temp, "AutoSize", true)
-	x = forms.getproperty(temp, "Right") + labelMargin
+	x = getRight(temp) + labelMargin
 	temp = forms.checkbox(kclForm, "kcl", x, y)
 	forms.setproperty(temp, "AutoSize", true)
 	forms.setproperty(temp, "Checked", true)
@@ -1711,16 +1716,15 @@ local function makeNewKclView()
 	viewport.boxHeightDelta = forms.getproperty(viewport.window, "Height") - forms.getproperty(theBox, "Height")
 
 	local hieghtOfControls = makeCollisionControls(viewport.window, viewport, 5, 3)
-	forms.setproperty(viewport.box, "Top", hieghtOfControls)
+	forms.setproperty(viewport.box, "Top", hieghtOfControls * displayScale)
 	forms.setsize(viewport.window, viewport.w * 2, viewport.h * 2 + hieghtOfControls)
 
 	-- No resize events. Make a resize/refresh button? Click the box? Box is easy but would be a kinda hidden feature.
 	local temp = forms.label(viewport.window, "Click the box to resize it!", 15, viewport.h * 2 + hieghtOfControls)
 	forms.setproperty(temp, "AutoSize", true)
-	forms.addclick(theBox, function()
+	local function resize_the_box()
 		local width = forms.getproperty(theBox, "Width")
 		local height = forms.getproperty(theBox, "Height")
-		-- Is this a resize?
 		local boxHeightDelta = viewport.boxHeightDelta + tonumber(forms.getproperty(theBox, "Top"))
 		local fw = forms.getproperty(viewport.window, "Width")
 		local fh = forms.getproperty(viewport.window, "Height")
@@ -1730,6 +1734,15 @@ local function makeNewKclView()
 			viewport.h = (fh - boxHeightDelta) / 2
 			viewport.x = viewport.w
 			viewport.y = viewport.h
+			return true
+		end
+		return false
+	end
+	resize_the_box()
+	forms.addclick(theBox, function()
+		local width = forms.getproperty(theBox, "Width")
+		local height = forms.getproperty(theBox, "Height")
+		if resize_the_box() then
 			redraw()
 			return
 		end
@@ -1857,24 +1870,32 @@ local function _mkdsinfo_setup()
 	local labelMargin = 2
 	local y = 10
 
-	local temp = forms.label(form.handle, "Watching: ", 10, y + 4)
+	local temp = forms.label(form.handle, "Watching: ", 100, 100)
 	forms.setproperty(temp, "AutoSize", true)
+
+	-- This is silly. Windows display scaling.
+	-- Also we cannot remove a label.
+	displayScale = forms.getproperty(temp, "Left") / 100.0
+	borderHeight = borderHeight * displayScale
+	forms.setproperty(temp, "Left", 10)
+	forms.setproperty(temp, "Top", y + 4)
+
 	form.watchLeft = forms.button(
 		form.handle, "<", watchLeftClick,
-		forms.getproperty(temp, "Right") + labelMargin, y,
+		getRight(temp) + labelMargin, y,
 		18, 23
 	)
-	form.watchLabel = forms.label(form.handle, "player", forms.getproperty(form.watchLeft, "Right") + labelMargin, y + 4)
+	form.watchLabel = forms.label(form.handle, "player", getRight(form.watchLeft) + labelMargin, y + 4)
 	forms.setproperty(form.watchLabel, "AutoSize", true)
 	form.watchRight = forms.button(
 		form.handle, ">", watchRightClick,
-		forms.getproperty(form.watchLabel, "Right") + labelMargin, y,
+		getRight(form.watchLabel) + labelMargin, y,
 		18, 23
 	)
 	
 	form.setComparisonPoint = forms.button(
 		form.handle, "Set comparison point", setComparisonPointClick,
-		forms.getproperty(form.watchRight, "Right") + buttonMargin, y,
+		getRight(form.watchRight) + buttonMargin, y,
 		100, 23
 	)
 	
@@ -1883,7 +1904,7 @@ local function _mkdsinfo_setup()
 	forms.setproperty(temp, "AutoSize", true)
 	temp = forms.button(
 		form.handle, "Copy from player", useInputsClick,
-		forms.getproperty(temp, "Right") + buttonMargin, y,
+		getRight(temp) + buttonMargin, y,
 		100, 23
 	)
 	form.ghostInputHackButton = temp
@@ -1892,12 +1913,12 @@ local function _mkdsinfo_setup()
 		-- Removing these from the UI, they don't see much use.
 		temp = forms.button(
 			form.handle, "Load bk2m", loadGhostClick,
-			forms.getproperty(temp, "Right") + labelMargin, y,
+			getRight(temp) + labelMargin, y,
 			70, 23
 		)
 		temp = forms.button(
 			form.handle, "Save bk2m", saveCurrentInputsClick,
-			forms.getproperty(temp, "Right") + labelMargin, y,
+			getRight(temp) + labelMargin, y,
 			70, 23
 		)
 		-- I also want a save-to-bk2m at some point. Although BizHawk doesn't expose a file open function (Lua can still write to files, we just don't have a nice way to let the user choose a save location.) so we might instead copy input to the current movie and let the user save as bk2m manually.
@@ -1905,7 +1926,7 @@ local function _mkdsinfo_setup()
 	-- Fake ghost
 	form.recordPositionButton = forms.button(
 		form.handle, "Record fake ghost", recordPosition,
-		forms.getproperty(temp, "Right") + labelMargin*2, y,
+		getRight(temp) + labelMargin*2, y,
 		110, 23
 	)
 
@@ -1931,7 +1952,7 @@ local function _mkdsinfo_setup()
 		end
 		redraw()
 	end)
-	form.delayCheckbox = forms.checkbox(form.handle, "delay", forms.getproperty(temp, "Right") + labelMargin, y + 3)
+	form.delayCheckbox = forms.checkbox(form.handle, "delay", getRight(temp) + labelMargin, y + 3)
 	forms.setproperty(form.delayCheckbox, "AutoSize", true)
 	forms.addclick(form.delayCheckbox, function() mainCamera.useDelay = not mainCamera.useDelay; redraw() end)
 	forms.setproperty(form.delayCheckbox, "Checked", true)
@@ -1940,7 +1961,7 @@ local function _mkdsinfo_setup()
 		-- Bug in BizHawk 2.9: We cannot draw on any picturebox if more than one form is open.
 		temp = forms.button(
 			form.handle, "new window", makeNewKclView,
-			forms.getproperty(form.delayCheckbox, "Right") + labelMargin, y, 86, 23
+			getRight(form.delayCheckbox) + labelMargin, y, 86, 23
 		)
 	end
 
