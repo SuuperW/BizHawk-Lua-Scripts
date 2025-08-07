@@ -40,6 +40,8 @@ if __name__ == "__main__":
 	if len(sys.argv) == 3:
 		input_file = sys.argv[1]
 		output_file = sys.argv[2]
+	elif len(sys.argv) == 2:
+		output_file = sys.argv[1]
 	else:
 		print("Using default file names.")
 
