@@ -87,9 +87,11 @@ if string.sub(bizhawkVersion, 0, 3) == "2.9" then
 	bizhawkVersion = 9
 elseif string.sub(bizhawkVersion, 0, 4) == "2.10" then
 	bizhawkVersion = 10
+elseif string.sub(bizhawkVersion, 0, 4) == "2.11" then
+	bizhawkVersion = 11
 else
 	bizhawkVersion = 0
-	print("You're using an unspported version of BizHawk.")
+	print("You're using an unsupported version of BizHawk.")
 end
 
 -- I've split this file into multiple files to keep it more organized.
