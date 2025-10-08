@@ -696,6 +696,8 @@ local function processPackage(camera, package)
 	end
 	if thing ~= nil then
 		Objects.getObjectDetails(thing)
+	else
+		return {}
 	end
 	if camera.active then
 		if camera.drawKcl == true then

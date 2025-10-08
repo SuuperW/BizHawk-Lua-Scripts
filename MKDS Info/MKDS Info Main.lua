@@ -397,13 +397,15 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	return newData
 end
 local function BlankRacerData()
-	local n = {}
-	n.basePos = Vector.zero()
-	n.facingAngle = 0
-	n.driftAngle = 0
+	local blankPrevious = {}
+	blankPrevious.basePos = Vector.zero()
+	blankPrevious.facingAngle = 0
+	blankPrevious.driftAngle = 0
 	local z = {}
 	for i = 1, 0x5a8 do z[i] = 0 end
-	return getRacerDetails(z, n, false)
+	local ret = getRacerDetails(z, blankPrevious, false)
+	ret.blank = true
+	return ret
 end
 focusedRacer = BlankRacerData()
 
@@ -667,14 +669,16 @@ local function _mkdsinfo_run_data(isSameFrame)
 	end
 
 	-- FAKE ghost
-	if fakeGhostData[raceFrame] ~= nil then
-		newRacers[racerCount] = getRacerBasicData2(fakeGhostData[raceFrame])
+	local offset = tonumber(forms.gettext(form.fakeGhostOffset))
+	local fgFrame = raceFrame - (offset or 0)
+	if fakeGhostData[fgFrame] ~= nil then
+		newRacers[racerCount] = getRacerBasicData2(fakeGhostData[fgFrame])
 		recordedPaths[racerCount + 1].path[raceFrame] = newRacers[racerCount].objPos
 	end
 	fakeGhostExists = false
 	if not watchingFakeGhost then
 		if form.recordingFakeGhost then
-			fakeGhostData[raceFrame] = focusedRacer.rawData
+			fakeGhostData[fgFrame] = focusedRacer.rawData
 		end
 		if newRacers[racerCount] ~= nil then
 			focusedRacer.ghost = newRacers[racerCount]
@@ -719,7 +723,7 @@ end
 
 local function drawInfoBottomScreen(data)
 	gui.use_surface("client")
-	if data == nil then
+	if data == nil or data.blank == true then
 		drawText(5, 5, "No data.")
 		return
 	end
@@ -1802,6 +1806,7 @@ local function recordPosition()
 		forms.settext(form.recordPositionButton, "Stop recording")
 	else
 		forms.settext(form.recordPositionButton, "Record fake ghost")
+		forms.setproperty(form.fakeGhostOffset, "Visible", true)
 	end
 end
 
@@ -1931,6 +1936,12 @@ local function _mkdsinfo_setup()
 		getRight(temp) + labelMargin*2, y,
 		110, 23
 	)
+	form.fakeGhostOffset = forms.textbox(
+		form.handle, "0",
+		nil, nil, nil,
+		285, y
+	)
+	forms.setproperty(form.fakeGhostOffset, "Visible", false)
 
 	y = y + 28
 	form.drawUnpausedButton = forms.button(
