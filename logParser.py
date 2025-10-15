@@ -14,6 +14,18 @@ names_of_arm_registers = [
 	'r12', 'sp', 'lr', 'pc',
 ]
 
+halfword_instructions = [
+	'ldrh', 'ldrexh', 'ldrht', 'ldrsh',
+	'ldrsht', 'strh', 'strexh', 'strht',
+	'tbh',
+]
+
+byte_instructions = [
+	'ldrb', 'ldrexb', 'ldrbt', 'ldrsb',
+	'ldrsbt', 'strb', 'strexb', 'strbt',
+	'swpb', 'tbb',
+]
+
 def index(string: str, search_for: str, start = None):
 	try:
 		return string.index(search_for, start)
@@ -81,6 +93,7 @@ class LogEntry:
 		self.inst_address = int(log_string[0:8], 16)
 		self.inst_hex = int(log_string[11:11+8], 16)
 		self.inst_disasm = log_string[20:56]
+		self.inst_operation = self.inst_disasm[:self.inst_disasm.index(' ')]
 		registers_begin = log_string.index('r', 56)
 		registers_string = log_string[registers_begin:]
 		colon_index = index(registers_string, ':')
@@ -138,9 +151,9 @@ class LogEntry:
 
 			base_address = value + offset
 			mask = 0xffffffff & ~3
-			if self.inst_disasm[3] == 'h':
+			if self.inst_operation in halfword_instructions:
 				mask = mask | 2
-			elif self.inst_disasm[3] == 'b':
+			elif self.inst_operation in byte_instructions:
 				mask = mask | 3
 			self.access_addresses = [base_address & mask] # Is this accurate?
 			self.mask = mask
@@ -220,7 +233,7 @@ if __name__ == '__main__':
 	access = int(sys.argv[2], 16)
 	log = TraceLog(file_name)
 	
-	lines_found = log.find_read(access)
+	lines_found = log.find_write(access)
 	print(lines_found)
 	for line_number in lines_found:
 		print(log.log_entrys[line_number].input_string)
