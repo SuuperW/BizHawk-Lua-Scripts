@@ -1,8 +1,5 @@
 MKDS Info is a Lua script that aims to be useful for creating tool-assisted speedruns.
 
-You can run MKDS Info by running "MKDS Info Main.lua", or by running "build.py" with Python and then running the .lua it creates. Both should behave identically.
-A pre-built single-file version can be found at https://tasvideos.org/UserFiles/ForUser/Suuper, although it is not updated very often.
-
 This script shows a bunch of information in text form on the bottom screen, and some information about collisions on the top screen.
 
 Use the "new window" button to see a 2D top-down view of your kart's hitbox and nearby collision surfaces. You can also optionally display nearby objects and checkpoints. Change the viewing angle with the < and > buttons for "perspective". Press < once for a 3D view from the camera. You can resize the window, and then click the black box to resize it to match the window. Clicking the box without resizing (or clicking it again after resizing) will move the camera around (meant to be used with the "freeze location" option).

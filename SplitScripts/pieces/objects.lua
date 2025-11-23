@@ -277,6 +277,7 @@ local function getMapObjDetails(obj)
 	local typeId = memory.read_u16_le(objPtr)
 	obj.typeId = typeId
 	obj.type = mapObjTypes[typeId] or ("unknown " .. typeId)
+	--obj.velocity = read_pos(obj.ptr + 0x10)
 	obj.boxy = false
 	obj.cylinder = false
 	

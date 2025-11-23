@@ -314,6 +314,7 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	newData.wallSpeedMult = get_s32(allData, 0x38C)
 	newData.airSpeed = get_s32(allData, 0x3F8)
 	newData.effectSpeed = get_s32(allData, 0x394)
+	newData.prb = (allData[0x4B] & 0x20) ~= 0
 	
 	-- angles
 	newData.facingAngle = get_s16(allData, 0x236)
@@ -568,7 +569,7 @@ local function getInGameCameraData()
 	return {
 		location = camPos,
 		direction = direction,
-		fovW = math.tan(cameraFoVV * camAspectRatio) * 0xec0, -- Idk why not 0x1000, but this gives better results. /shrug
+		fovW = math.tan(cameraFoVV) * camAspectRatio * 0x1000,
 		fovH = math.tan(cameraFoVV) * 0x1000,
 	}
 end
@@ -600,12 +601,15 @@ local function _mkdsinfo_run_data(isSameFrame)
 	racerCount = memory.read_s32_le(Memory.addrs.racerCount)
 	local raceFrame = memory.read_s32_le(ptrRaceTimers + 4)
 	local watchingFakeGhost = watchingId == racerCount
+	local offset = tonumber(forms.gettext(form.fakeGhostOffset))
+	local fgFrame = raceFrame - (offset or 0)
+
 	if watchingFakeGhost then
-		if fakeGhostData[raceFrame] == nil then
+		if fakeGhostData[fgFrame] == nil then
 			focusedRacer = BlankRacerData()
 		else
-			focusedRacer = getRacerDetails(fakeGhostData[raceFrame], focusedRacer, isSameFrame)
-			focusedRacer.rawData = fakeGhostData[raceFrame]
+			focusedRacer = getRacerDetails(fakeGhostData[fgFrame], focusedRacer, isSameFrame)
+			focusedRacer.rawData = fakeGhostData[fgFrame]
 		end
 	else
 		local raw = gerRacerRawData(ptrRacerData + watchingId * 0x5a8)
@@ -669,8 +673,6 @@ local function _mkdsinfo_run_data(isSameFrame)
 	end
 
 	-- FAKE ghost
-	local offset = tonumber(forms.gettext(form.fakeGhostOffset))
-	local fgFrame = raceFrame - (offset or 0)
 	if fakeGhostData[fgFrame] ~= nil then
 		newRacers[racerCount] = getRacerBasicData2(fakeGhostData[fgFrame])
 		recordedPaths[racerCount + 1].path[raceFrame] = newRacers[racerCount].objPos
@@ -711,6 +713,8 @@ local function _mkdsinfo_run_data(isSameFrame)
 	else
 		drawingPackages[1] = drawingPackage
 	end
+
+	g_racerData = allRacers
 end
 ---------------------------------------
 
@@ -859,6 +863,7 @@ local function drawInfoBottomScreen(data)
 	if data.nearestObject ~= nil then
 		local obj = data.nearestObject
 		dt(f("Object distance: %.0f (%s, %s)", obj.distance, obj.hitboxType, obj.type or obj.itemName))
+		--print(obj.velocity)
 		if config.showRawObjectPositionDelta then
 			dt(posVecToStr(Vector.subtract(obj.objPos, data.objPos), "raw: "))
 		end
@@ -1119,6 +1124,8 @@ end
 
 -- Main drawing function
 local function _mkdsinfo_run_draw(isInRace)
+	if g_mkdsi_nodraw == true then return end
+
 	-- BizHawk is slow. Let's tell it to not worry about waiting for this.
 	if not client.ispaused() and not drawWhileUnpaused then
 		if client.isseeking() then
