@@ -130,6 +130,9 @@ local Graphics = _export
 dofile "pieces/checkpoiunts.lua"
 local Checkpoints = _export
 
+dofile "pieces/mkds_stuff.lua"
+local mkdsstuff = _export
+
 -- BizHawk shenanigans
 if script_id == nil then
 	script_id = 1
@@ -521,21 +524,15 @@ local function clearDataOutsideRace()
 end
 
 local function inRace()
-	-- Check if racer exists.
-	local currentRacersPtr = memory.read_s32_le(Memory.addrs.ptrRacerData)
-	if currentRacersPtr == 0 then
-		clearDataOutsideRace()
-		return false
-	end
-	
-	-- Check if race has begun. (This static pointer points to junk on the main menu, which is why we checked racer data first.)
-	local timer = memory.read_s32_le(memory.read_s32_le(Memory.addrs.ptrRaceTimers) + 8)
+	local timer = mkdsstuff.FramesSinceRaceStart()
 	if timer == 0 then
 		clearDataOutsideRace()
-		return false
+		return
 	end
+
 	local raceConfig = memory.read_u32_le(Memory.addrs.ptrRaceMultiConfig)
 	local currentCourseId = memory.read_u8(raceConfig)
+	local currentRacersPtr = memory.read_s32_le(Memory.addrs.ptrRacerData)
 	if currentCourseId ~= course.id or currentRacersPtr ~= course.racersPtr or math.abs(frame - timer - course.frame) > 1 then
 		-- The timer update is on the boundary of frames (so we check +/- > 1)
 		course.id = currentCourseId
@@ -1124,8 +1121,6 @@ end
 
 -- Main drawing function
 local function _mkdsinfo_run_draw(isInRace)
-	if g_mkdsi_nodraw == true then return end
-
 	-- BizHawk is slow. Let's tell it to not worry about waiting for this.
 	if not client.ispaused() and not drawWhileUnpaused then
 		if client.isseeking() then
