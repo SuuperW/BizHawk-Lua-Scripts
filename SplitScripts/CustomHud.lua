@@ -10,7 +10,11 @@ _imports.Memory = Memory
 dofile "pieces/mkds_stuff.lua"
 mkdsstuff = _export
 
+dofile "pieces/vectors.lua"
+Vector = _export
+
 local time_trial = false
+local display_delay = 1
 
 ts = {}
 local function Test()
@@ -514,9 +518,7 @@ local function MakeSprite(x, y, tileX, tileY, color, size, shape, flips, blend, 
 	spriteId = spriteId + 1
 end
 
-local function DrawInputs(x, y)
-	local inputs = joypad.getwithmovie()
-
+local function DrawInputs(x, y, inputs)
 	local circleNames = { "A", "B", "X", "Y" }
 	local circleLocations = {
 		{ 18, 9 },
@@ -721,10 +723,10 @@ local function DrawBoostIndicator(x, y, prb, time)
 end
 
 local function DrawSpeedometer(x, y, speed)
-	speed = string.format("%.2f" ,math.abs(speed / 360))
+	speed = string.format("%.1f", math.abs(speed))
 	local scale = client.bufferwidth() / 256
 
-	local maxlen = 6
+	local maxlen = 5
 	speed_str = (string.rep(" ", maxlen) .. tostring(speed)):sub(-maxlen,-1)
 	for i = 1, maxlen do
 		local char = string.sub(speed_str, i, i)
@@ -747,6 +749,37 @@ local function DrawSpeedometer(x, y, speed)
 		2, 0, 0, 0, false, 0)
 end
 
+local function GetSpeed(racerPtr)
+	-- There isn't really any good in-game value.
+	-- We have these values in-game:
+	-- 1) position at 0x80, vector
+	-- 2) lastPosition at 0x8C, vector
+	-- 3) basePosDeltaMag at 0x2a4, scalar
+		-- This is 3D and includes motion into the ground while on ground. Fluctates when hopping.
+		-- It also does not include collision pushes, so it won't match actual movement speed on slopes.
+	-- 4) speed at 0x2a8, scalar
+		-- Just the base speed value, wildly inaccurate in certain situatinos.
+	
+	-- I also don't see a really great way to calculate a speed value. I'll use two different methods here:
+	-- A) While on the ground, take difference of position.
+	-- B) While in the air, subtract vertical speed. This should keep speed steady while hopping.
+		-- Once we exceed 13 air frames, ignore Y position.
+		-- It's not great, but for large jumps the old surface normal really isn't relevant anymore.
+	local posDelta = Vector.subtract(Memory.read_pos(racerPtr + 0x80), Memory.read_pos(racerPtr + 0x8C))
+	local airtime = memory.read_u32_le(racerPtr + 0x380)
+	if airtime > 13 then
+		posDelta[2] = 0
+	elseif airtime > 0 then
+		posDelta[2] = posDelta[2] - memory.read_s32_le(racerPtr + 0x260)
+	end
+
+	return Vector.getMagnitude(posDelta) * 0x1000 / 360
+	-- Times 0x1000 converts it back to subunits.
+	-- Divide by 360 is just convention for HUD speedometers.
+end
+
+local lastInputs = {}
+local lastHud = {}
 local function OnFrame()
 	memory.usememorydomain("ARM9 System Bus")
 	
@@ -763,20 +796,43 @@ local function OnFrame()
 			if not AreTexturesSet() then
 				CopyTIME_LAP()
 				WriteInputTextures()
+				WriteBoostTextures()
 			end
-			WriteBoostTextures()
 
 			local racerPtr = memory.read_u32_le(Memory.addrs.ptrRacerData)
 			local boostTime = memory.read_u8(racerPtr + 0x238)
 			local prb = (memory.read_u8(racerPtr + 0x4B) & 0x20) ~= 0
-			local speed = memory.read_u32_le(racerPtr + 0x2a4)
+			local speed = GetSpeed(racerPtr)
 
 			DrawTimer(timerX, timerY)
+			local firstSpriteIdAfterTimer = spriteId
 			if moveLapCounter then MoveLapCounter(lapid) end
-			DrawInputs(4, 140)
+			DrawInputs(4, 140, lastInputs)
 			DrawBoostIndicator(158, 180, prb, boostTime)
-			DrawSpeedometer(165, 162, speed)
+			DrawSpeedometer(173, 162, speed)
 			--Test()
+
+			-- The HUD should show what was pressed, while getwithmovie tells what is being held for the upcoming frame.
+			lastInputs = joypad.getwithmovie()
+
+			if display_delay > 0 then
+				local count = 0x80 - firstSpriteIdAfterTimer
+				lastHud[#lastHud + 1] = memory.read_bytes_as_array(0x07004000 + 8 * firstSpriteIdAfterTimer, 8 * count)
+				if #lastHud > display_delay then
+					memory.write_bytes_as_array(0x07004000 + 8 * firstSpriteIdAfterTimer, lastHud[1])
+					for i = (#lastHud[1] / 8) + firstSpriteIdAfterTimer, 0x7f do
+						memory.write_bytes_as_array(0x07004000 + i*8, {0,0,0,0,0,0,0,0})
+					end
+					for i = 1, display_delay do
+						lastHud[i] = lastHud[i + 1]
+					end
+					lastHud[display_delay + 1] = nil
+				else
+					for i = firstSpriteIdAfterTimer, 0x7f do
+						memory.write_bytes_as_array(0x07004000 + i*8, {0,0,0,0,0,0,0,0})
+					end
+				end
+			end
 
 			if spriteId >= 0x80 then
 				error("Exceeded maximum sprite count.")
