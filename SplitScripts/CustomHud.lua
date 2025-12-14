@@ -15,6 +15,7 @@ Vector = _export
 
 local time_trial = false
 local display_delay = 1
+local get_input_from_game = true -- false to read the emulator's controller
 
 ts = {}
 local function Test()
@@ -502,17 +503,15 @@ local function CopyTIME_LAP()
 end
 
 local function MakeSprite(x, y, tileX, tileY, color, size, shape, flips, blend, priority)
-	local sprite = { 0, 0, 0, 0, 0, 0, 0, 0 }
+	local sprite = gpu2d.BlankSprite()
 	gpu2d.SetSpriteSrcTile(sprite, tileX, tileY)
 	gpu2d.SetSpritePosition(sprite, x, y)
 	gpu2d.SetSpriteColor(sprite, color)
 	gpu2d.SetSpriteSize(sprite, size)
-	if blend then
-		sprite[2] = sprite[2] | 0x04
-	end
-	sprite[2] = sprite[2] | (shape << 6)
-	sprite[4] = sprite[4] | (flips << 4)
-	sprite[6] = sprite[6] | (priority << 2)
+	gpu2d.SetBlend(sprite, blend)
+	gpu2d.SetShape(sprite, shape)
+	gpu2d.SetFlip(sprite, flips)
+	gpu2d.SetPriority(sprite, priority)
 
 	gpu2d.WriteSprite(spriteId, sprite)
 	spriteId = spriteId + 1
@@ -778,6 +777,26 @@ local function GetSpeed(racerPtr)
 	-- Divide by 360 is just convention for HUD speedometers.
 end
 
+local function GetInputsFromGame(id)
+	local pad = Memory.addrs.ptrInputUnits + id * 0x5C
+	local buttons = memory.read_u16_le(pad + 2)
+
+	local inputs = {}
+	inputs["A"] = buttons & 0x0001 ~= 0
+	inputs["B"] = buttons & 0x0002 ~= 0
+	inputs["Select"] = buttons & 0x0004 ~= 0
+	inputs["Start"] = buttons & 0x0008 ~= 0
+	inputs["Right"] = buttons & 0x0010 ~= 0
+	inputs["Left"] = buttons & 0x0020 ~= 0
+	inputs["Up"] = buttons & 0x0040 ~= 0
+	inputs["Down"] = buttons & 0x0080 ~= 0
+	inputs["R"] = buttons & 0x0100 ~= 0
+	inputs["L"] = buttons & 0x0200 ~= 0
+	inputs["X"] = buttons & 0x0400 ~= 0
+	inputs["Y"] = buttons & 0x0800 ~= 0
+	return inputs
+end
+
 local lastInputs = {}
 local lastHud = {}
 local function OnFrame()
@@ -807,21 +826,33 @@ local function OnFrame()
 			DrawTimer(timerX, timerY)
 			local firstSpriteIdAfterTimer = spriteId
 			if moveLapCounter then MoveLapCounter(lapid) end
-			DrawInputs(4, 140, lastInputs)
+			if get_input_from_game then
+				DrawInputs(4, 140, GetInputsFromGame(0))
+			else
+				DrawInputs(4, 140, lastInputs)
+				-- The HUD should show what was pressed, while getwithmovie tells what is being held for the upcoming frame.
+				lastInputs = joypad.getwithmovie()
+			end
 			DrawBoostIndicator(158, 180, prb, boostTime)
 			DrawSpeedometer(173, 162, speed)
 			--Test()
 
-			-- The HUD should show what was pressed, while getwithmovie tells what is being held for the upcoming frame.
-			lastInputs = joypad.getwithmovie()
-
 			if display_delay > 0 then
 				local count = 0x80 - firstSpriteIdAfterTimer
-				lastHud[#lastHud + 1] = memory.read_bytes_as_array(0x07004000 + 8 * firstSpriteIdAfterTimer, 8 * count)
+				local currentHud = {}
+				for i = firstSpriteIdAfterTimer, 0x7f do
+					currentHud[#currentHud+1] = gpu2d.ReadSprite(i)
+				end
+				lastHud[#lastHud + 1] = currentHud
+
 				if #lastHud > display_delay then
-					memory.write_bytes_as_array(0x07004000 + 8 * firstSpriteIdAfterTimer, lastHud[1])
-					for i = (#lastHud[1] / 8) + firstSpriteIdAfterTimer, 0x7f do
-						memory.write_bytes_as_array(0x07004000 + i*8, {0,0,0,0,0,0,0,0})
+					local idAfterCopy = firstSpriteIdAfterTimer + #lastHud[1]
+					if idAfterCopy > 0x80 then error("Exceeded maximum sprite count.") end
+					for i = 1, #lastHud[1] do
+						gpu2d.WriteSprite(firstSpriteIdAfterTimer + i - 1, lastHud[1][i])
+					end 
+					for i = idAfterCopy, 0x7f do
+						gpu2d.EraseSprite(i)
 					end
 					for i = 1, display_delay do
 						lastHud[i] = lastHud[i + 1]
@@ -829,7 +860,7 @@ local function OnFrame()
 					lastHud[display_delay + 1] = nil
 				else
 					for i = firstSpriteIdAfterTimer, 0x7f do
-						memory.write_bytes_as_array(0x07004000 + i*8, {0,0,0,0,0,0,0,0})
+						gpu2d.EraseSprite(i)
 					end
 				end
 			end
@@ -840,6 +871,7 @@ local function OnFrame()
 		end
 	end
 end
+
 while true do
 	OnFrame()
 	emu.frameadvance()

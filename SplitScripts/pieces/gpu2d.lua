@@ -5,6 +5,17 @@ local _baseTextureAddressTop    = 0x06400000
 local _baseTextureAddressBottom = 0x06600000
 local _basePalleteAddress       = 0x05000000
 
+local SHAPE = {}
+SHAPE.NORMAL = 0
+SHAPE.WIDE = 1
+SHAPE.TALL = 2
+
+local FLIP = {}
+FLIP.NONE = 0
+FLIP.HORIZONTAL = 1
+FLIP.VERTICAL = 2
+FLIP.BOTH = 3
+
 local function GetSpriteAddress(spriteID)
 	if spriteID == nil then print(debug.traceback()) end
 
@@ -193,6 +204,27 @@ local function SetSpriteSize(spriteData, size)
 	spriteData[4] = (spriteData[4] & 0x3f) | (size << 6)
 end
 
+local function BlankSprite()
+	return { 0, 0, 0, 0, 0, 0, 0, 0 }
+end
+
+local function SetBlend(spriteData, blend)
+	if blend then
+		spriteData[2] = spriteData[2] | 0x04
+	else
+		spriteData[2] = spriteData[2] & 0xfb
+	end
+end
+local function SetShape(spriteData, shape)
+	spriteData[2] = (spriteData[2] & 0x3f) | (shape << 6)
+end
+local function SetFlip(spriteData, flip)
+	spriteData[4] = (spriteData[4] & 0xcf) | (flip << 4)
+end
+local function SetPriority(spriteData, priority)
+	spriteData[6] = (spriteData[6] & 0xf3) | (priority << 2)
+end
+
 _export = {
 	ReadSprite = ReadSpriteData,
 	WriteSprite = WriteSpriteData,
@@ -217,4 +249,12 @@ _export = {
 	GetSpriteSize = GetSpriteSize,
 	SetSpriteSize = SetSpriteSize,
 	RemoveRedundantSprites = RemoveRedundantSprites,
+	BlankSprite = BlankSprite,
+	SetBlend = SetBlend,
+	SetShape = SetShape,
+	SetFlip = SetFlip,
+	SetPriority = SetPriority,
+	
+	SHAPE = SHAPE,
+	FLIP = FLIP,
 }
