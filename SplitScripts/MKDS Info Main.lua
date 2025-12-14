@@ -387,7 +387,7 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	--newData.f230 = get_u32(allData, 0x230)
 
 	-- Item
-	local itemDataPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo + 0x210 * allData[0x74])
+	local itemDataPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo) + 0x210 * allData[0x74]
 	if itemDataPtr ~= 0 then
 		newData.roulleteItem = memory.read_u8(itemDataPtr + 0x10)
 		newData.itemId = memory.read_u8(itemDataPtr + 0x30)
@@ -431,7 +431,7 @@ local function getCheckpointData(dataObj)
 end
 
 local function setGhostInputs(form)
-	local ptr = memory.read_s32_le(Memory.addrs.ptrRacerInputs + 0x5c)
+	local ptr = memory.read_s32_le(Memory.addrs.ptrInputUnits + 0x5c + 0x28)
 	if ptr == 0 then error("How are you here?") end
 	
 	local currentInputs = memory.read_bytes_as_array(ptr, 0xdce)
@@ -1215,7 +1215,7 @@ local function useInputsClick()
 	end
 	
 	if form.ghostInputs == nil then
-		form.ghostInputs = memory.read_bytes_as_array(memory.read_s32_le(Memory.addrs.ptrRacerInputs), 0xdce)
+		form.ghostInputs = memory.read_bytes_as_array(memory.read_s32_le(Memory.addrs.ptrInputUnits + 0x28), 0xdce)
 		form.firstGhostInputFrame = frame - memory.read_s32_le(memory.read_s32_le(Memory.addrs.ptrRaceTimers) + 4) + 121
 		form.ghostLapTimes = memory.read_bytes_as_array(memory.read_s32_le(Memory.addrs.ptrRaceStatus) + 0x20, 0x4 * 5)
 		setGhostInputs(form)

@@ -7,7 +7,7 @@ local ptrOffset = somePointerWithRegionAgnosticAddress - valueForUSVersion
 -- Base addresses are valid for the US Version
 local addrs = {
 	ptrRacerData = 0x0217ACF8 + ptrOffset,
-	ptrRacerInputs = 0x02175630 + ptrOffset,
+	ptrInputUnits = 0x02175608 + ptrOffset,
 	ptrRaceTimers = 0x0217AA34 + ptrOffset,
 	ptrMissionInfo = 0x021A9B70 + ptrOffset,
 	ptrObjStuff = 0x0217B588 + ptrOffset,

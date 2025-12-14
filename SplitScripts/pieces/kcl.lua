@@ -393,7 +393,7 @@ local function getCourseCollisionData()
 
 	local dataPtr = get_u32(someCourseData, 8)
 	local endData = get_u32(someCourseData, 12)
-	if (endData - dataPtr) > 0x10000 then error("kcl data too big") end
+	if (endData - dataPtr) > 0x10000 then error(string.format("kcl data too big: %x from %x", endData - dataPtr, dataPtr)) end
 	local triangleData = memory.read_bytes_as_array(dataPtr + 1, endData - dataPtr)
 	triangleData[0] = memory.read_u8(dataPtr)
 	
