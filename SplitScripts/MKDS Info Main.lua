@@ -295,7 +295,7 @@ local function getRacerBasicData2(raw)
 end
 local function getRacerDetails(allData, previousData, isSameFrame)
 	if allData == nil then
-		error("Attempted to get racer details for null racer.")
+		error("Attempted to get racer details for nil racer.")
 	end
 
 	local newData = {}
@@ -525,7 +525,7 @@ end
 
 local function inRace()
 	local timer = mkdsstuff.FramesSinceRaceStart()
-	if timer == 0 then
+	if timer == -1 then
 		clearDataOutsideRace()
 		return
 	end
