@@ -171,7 +171,7 @@ local function getBoxyDistances(obj, pos, radius)
 	}
 end
 local function getCylinderDistances(obj, pos, radius)
-	local posDelta = Vector.subtract(pos, obj.dynPos)
+	local posDelta = Vector.subtract(pos, obj.dynPos or obj.objPos)
 	
 	local dir = obj.orientation
 	local orientedPosDelta = {
@@ -573,10 +573,8 @@ local function getNearbyObjects(thing, dist)
 		getObjectDetails(obj)
 
 		if obj.hitboxType == "cylindrical" then
-			local relative = Vector.subtract(thing.objPos, obj.objPos)
-			local distance = math.sqrt(relative[1] * relative[1] + relative[3] * relative[3])
-			obj.distance = distance - thing.objRadius - obj.objRadius
-			-- TODO: Check vertical distance?
+			obj.distanceComponents = getCylinderDistances(obj, thing.objPos, thing.objRadius)
+			obj.distance = obj.distanceComponents.d
 		elseif obj.hitboxType == "spherical" then
 			local relative = Vector.subtract(thing.objPos, obj.objPos)
 			local distance = math.sqrt(relative[1] * relative[1] + relative[2] * relative[2] + relative[3] * relative[3])
