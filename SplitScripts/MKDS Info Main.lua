@@ -365,10 +365,10 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	newData.flags44 = get_u32(allData, 0x44)
 	
 	-- extra movement
-	newData.movementAdd1fc = get_pos(allData, 0x1fc)
-	newData.movementAdd2f0 = get_pos(allData, 0x2f0)
-	newData.movementAdd374 = get_pos(allData, 0x374)
-	--newData.tb = get_pos(allData, 0x2d8)
+	newData.bouce_1 = get_pos(allData, 0x1fc)
+	newData.bouce_2 = get_pos(allData, 0x2f0)
+	newData.bouce_3 = get_pos(allData, 0x374)
+	newData.bounce_2c = get_pos(allData, 0x2d8)
 	newData.waterfallPush = get_pos(allData, 0x268)
 	newData.waterfallStrength = get_s32(allData, 0x274)
 
@@ -385,6 +385,7 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	--newData.test = get_s32(allData, 0x1d4)
 	--newData.scale = get_s32(allData, 0xc4)
 	--newData.f230 = get_u32(allData, 0x230)
+	newData.playerId = get_s32(allData, 0x74)
 
 	-- Item
 	local itemDataPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo) + 0x210 * allData[0x74]
@@ -860,7 +861,6 @@ local function drawInfoBottomScreen(data)
 	if data.nearestObject ~= nil then
 		local obj = data.nearestObject
 		dt(f("Object distance: %.0f (%s, %s)", obj.distance, obj.hitboxType, obj.type or obj.itemName))
-		--print(obj.velocity)
 		if config.showRawObjectPositionDelta then
 			dt(posVecToStr(Vector.subtract(obj.objPos, data.objPos), "raw: "))
 		end
@@ -878,14 +878,14 @@ local function drawInfoBottomScreen(data)
 	end
 	
 	-- bouncy stuff
-	if Vector.getMagnitude(data.movementAdd1fc) ~= 0 then
-		dt(normalVectorToStr(data.movementAdd1fc, "bounce 1: "))
+	if Vector.getMagnitude(data.bouce_1) ~= 0 then
+		dt(normalVectorToStr(data.bouce_1, "bounce 1: "))
 	end
-	if Vector.getMagnitude(data.movementAdd2f0) ~= 0 then
-		dt(normalVectorToStr(data.movementAdd2f0, "bounce 2: "))
+	if Vector.getMagnitude(data.bouce_2) ~= 0 then
+		dt(normalVectorToStr(data.bouce_2, "bounce 2: "))
 	end
-	if Vector.getMagnitude(data.movementAdd374) ~= 0 then
-		dt(normalVectorToStr(data.movementAdd374, "bounce 3: "))
+	if Vector.getMagnitude(data.bouce_3) ~= 0 then
+		dt(normalVectorToStr(data.bouce_3, "bounce 3: "))
 	end
 	if data.waterfallStrength ~= 0 then
 		dt(normalVectorToStr(Vector.multiply_r(data.waterfallPush, data.waterfallStrength), "waterfall: "))

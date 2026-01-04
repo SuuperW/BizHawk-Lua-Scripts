@@ -1,5 +1,6 @@
 local Vector = _imports.Vector
 local Objects = _imports.Objects
+local Memory = _imports.Memory
 local KCL = _imports.KCL
 
 local function fixLine(x1, y1, x2, y2)
@@ -622,6 +623,18 @@ local function _drawObjectCollision(racer, obj)
 		end
 	elseif obj.hitboxType == "boxy" and racer ~= nil then
 		addToDrawingQue(-2, { HITBOX_PAIR, obj, racer })
+	end
+
+	-- Specials
+	if (obj.typeId == 424 or obj.typeId == 436 or obj.typeId == 437) and racer ~= nil and racer.playerId ~= nil then
+		-- pinball bumpers
+		local bumpTimer = memory.read_u32_le(obj.ptr + 0x120 + (racer.playerId * 4))
+		if bumpTimer > 29 then
+			local bumpVector = Vector.multiply_r(racer.bounce_2c, obj.objRadius * 2)
+			addToDrawingQue(-1, { LINE, obj.objPos, Vector.add(obj.objPos, bumpVector), 0xffaaffaa })
+			local moveVector = Vector.multiply_r(Vector.normalize_float(racer.basePosDelta), obj.objRadius)
+			addToDrawingQue(-1, { LINE, racer.objPos, Vector.add(racer.objPos, moveVector), 0xffeeeeee })
+		end
 	end
 end
 local function makeObjectsQue(focusObject)
