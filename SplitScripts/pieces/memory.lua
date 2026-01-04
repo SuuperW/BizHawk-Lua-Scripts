@@ -21,6 +21,7 @@ local addrs = {
 	ptrVisibilityStuff = 0x217AE90 + ptrOffset,
 	ptrBattleController = 0x0217B1DC + ptrOffset,
 	ptrItemInfo = memory.read_u32_le(0x020FA8A4 + ptrOffset), -- needs version testing
+	ptrSceneState = 0x021759ac + ptrOffset,
 	-- Code and DTCM, will not have the same ptrOffset. (E and U versions are the same)
 	camHackCodeAddr = 0x207AA24,
 	ptrItemSets = 0x27E00CC,

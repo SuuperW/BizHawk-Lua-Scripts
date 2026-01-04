@@ -9,6 +9,13 @@ local function FramesSinceRaceStart()
 	if currentRacersPtr == 0 then
 		return -1
 	end
+
+	-- Race won't begin until scene is running.
+	local scenePtr = memory.read_u32_le(Memory.addrs.ptrSceneState)
+	local sceneState = memory.read_u32_le(scenePtr + 0x10c)
+	if sceneState < 2 or sceneState > 3 then
+		return -1
+	end
 	
 	-- Check if race has begun. (This static pointer points to junk on the main menu, which is why we checked racer data first.)
 	return memory.read_s32_le(memory.read_s32_le(Memory.addrs.ptrRaceTimers) + 8)
