@@ -971,7 +971,7 @@ end
 local mainCamera = makeDefaultViewport()
 mainCamera.drawText = function(x, y, s, c) gui.text(x + iView.x, iView.y - y, s, c) end
 mainCamera.isPrimary = true
-mainCamera.useDelay = true
+mainCamera.useDelay = false
 mainCamera.active = false
 mainCamera.renderHitboxesWhenFakeGhost = config.renderHitboxesWhenFakeGhost
 mainCamera.drawRacers = false
