@@ -1,6 +1,6 @@
 _imports = {}
 
-dofile "pieces/gpu2d.lua"
+dofile "pieces/gpu2d_s.lua"
 gpu2d = _export
 
 dofile "pieces/memory.lua"
@@ -63,14 +63,14 @@ local spriteId = 0
 
 local function MoveSpriteBy(id, x, y)
 	local sd = gpu2d.ReadSprite(id)
-	sd[1] = sd[1] + y
-	sd[3] = sd[3] + x
+	local pos = gpu2d.GetSpritePosition(sd)
+	gpu2d.SetSpritePosition(sd, pos[1] + x, pos[2] + y)
 	gpu2d.WriteSprite(id, sd)
 end
 
 local function AreTexturesSet()
 	local tile = gpu2d.GetTileTextureTop(copyTexturesToX, copyTexturesToY)
-	return tile[19] ~= 0
+	return (tile[5] & 0x00ff0000) ~= 0
 end
 
 local function DrawTimer(x, y)
@@ -125,7 +125,7 @@ end
 local function FindLapCounter()
 	local sid = 0
 	local sd = gpu2d.ReadSprite(sid)
-	while sd[5] ~= 88 do
+	while (sd[3] & 0xff) ~= 88 do
 		if sid > 80 then
 			return nil
 		end
@@ -137,7 +137,7 @@ end
 local function MoveLapCounter(sid)
 	MoveSpriteBy(sid, 22, 17)
 	sd = gpu2d.ReadSprite(sid + 1)
-	if sd[5] == 27 then
+	if (sd[3] & 0xff) == 27 then
 		gpu2d.EraseSprite(sid + 1)
 		gpu2d.EraseSprite(sid + 2)
 	else
@@ -799,75 +799,85 @@ end
 
 local lastInputs = {}
 local lastHud = {}
+local firstCopy = true
 local function OnFrame()
 	memory.usememorydomain("ARM9 System Bus")
 	
 	if mkdsstuff.FramesSinceRaceStart() > 0 then
 		local lapid = FindLapCounter()
-		if lapid ~= nil then
-			gpu2d.RemoveRedundantSprites(false)
-			lapid = FindLapCounter()
+		if lapid == nil then return end
 
-			spriteId = gpu2d.FirstAvailableSpriteTop()
-			-- why does this one exist?
-			gpu2d.EraseSprite(lapid - 1)
-			
-			if not AreTexturesSet() then
-				CopyTIME_LAP()
-				WriteInputTextures()
-				WriteBoostTextures()
-			end
+		gpu2d.RemoveRedundantSprites(false)
+		lapid = FindLapCounter()
 
-			local racerPtr = memory.read_u32_le(Memory.addrs.ptrRacerData)
-			local boostTime = memory.read_u8(racerPtr + 0x238)
-			local prb = (memory.read_u8(racerPtr + 0x4B) & 0x20) ~= 0
-			local speed = GetSpeed(racerPtr)
+		spriteId = gpu2d.FirstAvailableSpriteTop()
+		-- why does this one exist?
+		gpu2d.EraseSprite(lapid - 1)
+		
+		if not AreTexturesSet() then
+			CopyTIME_LAP()
+			WriteInputTextures()
+			WriteBoostTextures()
+		end
 
-			DrawTimer(timerX, timerY)
-			local firstSpriteIdAfterTimer = spriteId
-			if moveLapCounter then MoveLapCounter(lapid) end
-			if get_input_from_game then
-				DrawInputs(4, 140, GetInputsFromGame(0))
-			else
-				DrawInputs(4, 140, lastInputs)
-				-- The HUD should show what was pressed, while getwithmovie tells what is being held for the upcoming frame.
-				lastInputs = joypad.getwithmovie()
-			end
-			DrawBoostIndicator(158, 180, prb, boostTime)
-			DrawSpeedometer(173, 162, speed)
-			--Test()
+		local racerPtr = memory.read_u32_le(Memory.addrs.ptrRacerData)
+		local boostTime = memory.read_u8(racerPtr + 0x238)
+		local prb = (memory.read_u8(racerPtr + 0x4B) & 0x20) ~= 0
+		local speed = GetSpeed(racerPtr)
 
-			if display_delay > 0 then
-				local count = 0x80 - firstSpriteIdAfterTimer
-				local currentHud = {}
-				for i = firstSpriteIdAfterTimer, 0x7f do
-					currentHud[#currentHud+1] = gpu2d.ReadSprite(i)
+		DrawTimer(timerX, timerY)
+		local firstSpriteIdAfterTimer = spriteId
+		if moveLapCounter then MoveLapCounter(lapid) end
+		if get_input_from_game then
+			DrawInputs(4, 140, GetInputsFromGame(0))
+		else
+			DrawInputs(4, 140, lastInputs)
+			-- The HUD should show what was pressed, while getwithmovie tells what is being held for the upcoming frame.
+			lastInputs = joypad.getwithmovie()
+		end
+		DrawBoostIndicator(158, 180, prb, boostTime)
+		DrawSpeedometer(173, 162, speed)
+		--Test()
+
+		if display_delay > 0 then
+			local count = 0x80 - firstSpriteIdAfterTimer
+			local currentHud = {}
+			for i = firstSpriteIdAfterTimer, 0x7f do
+				local spriteData = gpu2d.ReadSprite(i)
+				if spriteData[1] == 0x00C0 then
+					break
 				end
-				lastHud[#lastHud + 1] = currentHud
+				currentHud[#currentHud+1] = spriteData
+			end
+			lastHud[#lastHud + 1] = currentHud
 
-				if #lastHud > display_delay then
-					local idAfterCopy = firstSpriteIdAfterTimer + #lastHud[1]
-					if idAfterCopy > 0x80 then error("Exceeded maximum sprite count.") end
+			if #lastHud > display_delay then
+				local idAfterCopy = firstSpriteIdAfterTimer + #lastHud[1]
+				if idAfterCopy > 0x80 then
+					if firstCopy then firstCopy = false
+					else error("Exceeded maximum sprite count.") end
+				else
 					for i = 1, #lastHud[1] do
 						gpu2d.WriteSprite(firstSpriteIdAfterTimer + i - 1, lastHud[1][i])
 					end 
 					for i = idAfterCopy, 0x7f do
 						gpu2d.EraseSprite(i)
 					end
-					for i = 1, display_delay do
-						lastHud[i] = lastHud[i + 1]
-					end
-					lastHud[display_delay + 1] = nil
-				else
-					for i = firstSpriteIdAfterTimer, 0x7f do
-						gpu2d.EraseSprite(i)
-					end
+				end
+
+				for i = 1, display_delay do
+					lastHud[i] = lastHud[i + 1]
+				end
+				lastHud[display_delay + 1] = nil
+			else
+				for i = firstSpriteIdAfterTimer, 0x7f do
+					gpu2d.EraseSprite(i)
 				end
 			end
+		end
 
-			if spriteId >= 0x80 then
-				error("Exceeded maximum sprite count.")
-			end
+		if spriteId >= 0x80 then
+			error("Exceeded maximum sprite count.")
 		end
 	end
 end
