@@ -15,7 +15,6 @@ local config = {
 	showExactMovement = true, -- true: dispaly fixed-point values as integers (0-4096 for 0.0-1.0)
 	showAnglesAsDegrees = false,
 	showBottomScreenInfo = true, -- item roullete thing too
-	showWasbThings = false,
 	showRawObjectPositionDelta = false,
 	backfaceCulling = true, -- Do not show triangles that are facing away from the camera
 	renderHitboxesWhenFakeGhost = false, -- Render your hitbox and that of the fake ghost, when a fake ghost exists, on the main screen, when the main camera is off.
@@ -723,7 +722,240 @@ end
 ---------------------------------------
 
 -- Drawing --------------------------------------
+local roulleteItemNames = { -- The IDs according to the item roullete.
+	"red shell", "banana", "fake item box",
+	"mushroom", "triple mushroom", "bomb",
+	"blue shell", "lightning", "triple greens",
+	"triple banana", "triple reds", "star",
+	"gold mushroom", "bullet bill", "blooper",
+	"boo", "invalid17", "invalid18",
+	"none",
+}
+roulleteItemNames[0] = "green shell"
+
 local iView = {}
+local textDisplayOptions = {
+	{ "speed", true, function(data)
+		local wallClip = data.wallSpeedMult
+		local losses = "turnLoss: " .. format01(data.turnLoss)
+		if wallClip ~= 4096 or data.flags44 & 0xc0 ~= 0 then
+			losses = losses .. ", wall: " .. format01(data.wallSpeedMult)
+		end
+		if data.airSpeed ~= 4096 then
+			losses = losses .. ", air: " .. format01(data.airSpeed)
+		end
+		if data.effectSpeed ~= 4096 then
+			losses = losses .. ", small: " .. format01(data.effectSpeed)
+		end
+		return {
+			string.format("Boost: %2i, MT: %2i, %i", data.boostAll, data.boostMt, data.mtTime),
+			string.format("Speed: %i, real: %.1f", data.speed, data.real2dSpeed),
+			string.format("Y Sp : %i, Max Sp: %i", data.verticalVelocity, data.maxSpeed),
+			losses,
+		}
+	end },
+	{ "position", true, function(data)
+		local bm = Vector.add(Vector.subtract(data.basePos, data.actualPosDelta), data.basePosDelta)
+		local pod = Vector.subtract(data.objPos, bm)
+		return {
+			data.air .. " (" .. data.framesInAir .. ")",
+			posVecToStr(data.basePos, "X, Z, Y  : "),
+			posVecToStr(data.actualPosDelta, "Delta    : "),
+			posVecToStr(data.collisionPush, "Collision: "),
+			posVecToStr(pod, "Hitbox   : "),
+		}
+	end },
+	{ "angle", true, function(data)
+		local lines = nil
+		if config.showAnglesAsDegrees then
+			-- People like this
+			local function atd(a)
+				return (((a / 0x10000) * 360) + 360) % 360
+			end
+			local function ttd(v)
+				local radians = math.atan(v[1], v[3])
+				return radians * 360 / (2 * math.pi)
+			end
+			local da = atd(data.driftAngle)
+			if da > 180 then da = da - 360 end
+			lines = {
+				string.format("Facing angle: %.3f", atd(data.facingAngle)),
+				string.format("Drift angle: %.3f",  da),
+				string.format("Movement angle: %.3f (%.3f)", ttd(data.movementDirection), ttd(data.movementTarget)),
+			}
+		else
+			-- Suuper likes this
+			local function tta(v)
+				return string.format(" (%5.3f)", Vector.get2dMagnitude(v))
+			end
+			lines = {
+				string.format("Angle: %6i + %6i = %6i", data.facingAngle, data.driftAngle, data.facingAngle + data.driftAngle),
+				string.format("Delta: %6i + %6i = %6i", data.facingDelta, data.driftDelta, data.facingDelta + data.driftDelta),
+				normalVectorToStr(data.movementDirection, "Movement: ") .. tta(data.movementDirection),
+				normalVectorToStr(data.movementTarget, "Target  : ") .. tta(data.movementTarget),
+			}
+		end
+		lines[#lines + 1] = string.format("Pitch: %i (%i, %i)", data.pitch, quaternionAngle(data.snQuaternion), quaternionAngle(data.snqTarget))
+		return lines
+	end },
+	{ "item", true, function(data)
+		if data.roulleteItem ~= 19 then
+			local lines = {}
+			lines[#lines + 1] = roulleteItemNames[data.roulleteItem]
+			if data.roulleteState == 1 then
+				local ttpi = 60 - data.roulleteTimer
+				if ttpi <= 0 then
+					lines[#lines + 1] = "stop roullete now"
+				else
+					lines[#lines + 1] = string.format("stop in %i frames", ttpi)
+				end
+			elseif data.roulleteState == 2 then
+				local ttpi = 33 - data.roulleteTimer
+				lines[#lines + 1] = string.format("use in %i frames", ttpi)
+			end
+			return lines
+		else
+			return nil
+		end
+	end },
+	{ "surface", false, function(data)
+		local n = data.surfaceNormalVector
+		local l1 = nil
+		if config.showExactMovement then
+			l1 = string.format("Surface grip: %4i, sp: %4i,", data.grip, data.offroadSpeed)
+		else
+			l1 = string.format("Surface grip: %6.3f, sp: %6.3f,", data.grip, data.offroadSpeed)
+		end
+		local steepness = Vector.get2dMagnitude(n) / (n[2] / 0x1000)
+		steepness = string.format(", steep: %#.2f", steepness)
+		return {
+			l1,
+			normalVectorToStr(n, "normal: ") .. steepness,
+		}
+	end },
+	{ "playerDistance", true, function(data)
+		if data.racerId ~= 0 then
+			local pos = data.basePos
+			local playerPos = allRacers[0].basePos
+			local diff = Vector.subtract(pos, playerPos)
+			diff = { diff[1] // 0x1000, diff[2] // 0x1000, diff[3] // 0x1000 }
+			local roughDistance = diff[1] * diff[1] + diff[2] * diff[2] + diff[3] * diff[3]
+			return string.format("Dist to player: %.1f", math.sqrt(roughDistance))
+		else
+			return nil
+		end
+	end },
+	{ "quaternions", false, function(data)
+		return {
+			rawQuaternion(data.snQuaternion, "Real:   "),
+			rawQuaternion(data.snqTarget,    "Target: "),
+		}
+	end },
+	{ "ghost distance", true, function(data)
+		if data.ghost then
+			local distX = data.basePos[1] - data.ghost.basePos[1]
+			local distZ = data.basePos[3] - data.ghost.basePos[3]
+			local dist = math.sqrt(distX * distX + distZ * distZ)
+			return string.format("Distance from ghost (2D): %.0f", dist)
+		else
+			return nil
+		end
+	end },
+	{ "point comparison", false, function(data)
+		if form.comparisonPoint ~= nil then
+			local delta = {
+				data.basePos[1] - form.comparisonPoint[1],
+				data.basePos[3] - form.comparisonPoint[3]
+			}
+			local dist = math.floor(math.sqrt(delta[1] * delta[1] + delta[2] * delta[2]))
+			local angleRad = math.atan(delta[1], delta[2])
+			return {
+				"Distance travelled: " .. dist,
+				"Angle: " .. math.floor(angleRad * 0x10000 / (2 * math.pi)),
+			}
+		else
+			return { "point not set" }
+		end
+	end },
+	{ "nearestObject", true, function(data)
+		if data.nearestObject ~= nil then
+			local obj = data.nearestObject
+			local lines = {}
+			lines[1] = string.format("Object distance: %.0f (%s, %s)", obj.distance, obj.hitboxType, obj.type or obj.itemName)
+			if config.showRawObjectPositionDelta then
+				lines[#lines + 1] = posVecToStr(Vector.subtract(obj.objPos, data.objPos), "raw: ")
+			end
+			if obj.distanceComponents ~= nil then
+				if obj.innerDistComps ~= nil then
+					lines[#lines + 1] = posVecToStr(obj.distanceComponents, "outer: ")
+					lines[#lines + 1] = posVecToStr(obj.innerDistComps, "inner: ")
+				elseif obj.distanceComponents.v == nil then
+					lines[#lines + 1] = posVecToStr(obj.distanceComponents)
+				else
+					lines[#lines + 1] = string.format("%9i, %8i", obj.distanceComponents.h, obj.distanceComponents.v)
+				end
+			end
+			return lines
+		else
+			return nil
+		end
+	end },
+	{ "extra momentum", true, function(data)
+		local lines = {}
+		if Vector.getMagnitude(data.bouce_1) ~= 0 then
+			lines[#lines + 1] = normalVectorToStr(data.bouce_1, "bounce 1: ")
+		end
+		if Vector.getMagnitude(data.bouce_2) ~= 0 then
+			lines[#lines + 1] = normalVectorToStr(data.bouce_2, "bounce 2: ")
+		end
+		if Vector.getMagnitude(data.bouce_3) ~= 0 then
+			lines[#lines + 1] = normalVectorToStr(data.bouce_3, "bounce 3: ")
+		end
+		if data.waterfallStrength ~= 0 then
+			lines[#lines + 1] =  normalVectorToStr(Vector.multiply_r(data.waterfallPush, data.waterfallStrength), "waterfall: ")
+		end
+		if #lines == 0 then return nil end
+		return lines
+	end },
+	{ "checkpoint", true, function(data)
+		if data.checkpoint ~= nil then
+			local lines = {}
+			if (data.spawnPoint > -1) then lines[1] = "Spawn Point: " .. data.spawnPoint end
+			lines[#lines + 1] = string.format("Checkpoint number (player) = %i (%i)", data.checkpoint, data.keyCheckpoint)
+			lines[#lines + 1] = "Lap: " .. data.lap
+			return lines
+		else
+			return nil
+		end
+	end },
+	{ "coins", true, function(data)
+		if raceData.coinsBeingCollected ~= nil and raceData.coinsBeingCollected > 0 then
+			local coinCheckIn = nil
+			if raceData.framesMod8 == 0 then
+				return { "Coin increment this frame" }
+			else
+				return { string.format("Coin increment in %i frames", 8 - raceData.framesMod8) }
+			end
+		else
+			return nil
+		end
+	end },
+	{ "lap time", false, function(data)
+		if data.lap_f then
+			return  { "Lap: " .. data.lap_f }
+		else
+			return nil
+		end
+	end },
+}
+local function getTextOptionIndex(option)
+	for i = 1, #textDisplayOptions do
+		if textDisplayOptions[i][1] == option then
+			return i
+		end
+	end
+	error("Invalid text option")
+end
 
 local function drawText(x, y, str, color)
 	gui.text(x + iView.x, y + iView.y, str, color)
@@ -758,7 +990,7 @@ local function drawInfoBottomScreen(data)
 		if sectionIsDark then
 			gui.drawBox(iView.x, lastSectionBegin + iView.y, iView.x + iView.w, y + iView.y, 0xff000000, 0xff000000)
 		else
-			gui.drawBox(iView.x, lastSectionBegin + iView.y, iView.x + iView.w, y + iView.y, 0x60000000, 0x60000000)
+			gui.drawBox(iView.x, lastSectionBegin + iView.y, iView.x + iView.w, y + iView.y, 0x70000000, 0x70000000)
 		end
 		gui.drawLine(iView.x, y + iView.y, iView.x + iView.w, y + iView.y, "red")
 		sectionIsDark = not sectionIsDark
@@ -766,199 +998,15 @@ local function drawInfoBottomScreen(data)
 		y = y + sectionMargin / 2 - 1
 	end
 
-	local f = string.format
-	
-	-- Display speed, boost stuff
-	dt(f("Boost: %2i, MT: %2i, %i", data.boostAll, data.boostMt, data.mtTime))
-	dt(f("Speed: %i, real: %.1f", data.speed, data.real2dSpeed))
-	dt(f("Y Sp : %i, Max Sp: %i", data.verticalVelocity, data.maxSpeed))
-	local wallClip = data.wallSpeedMult
-	local losses = "turnLoss: " .. format01(data.turnLoss)
-	if wallClip ~= 4096 or data.flags44 & 0xc0 ~= 0 then
-		losses = losses .. ", wall: " .. format01(data.wallSpeedMult)
-	end
-	if data.airSpeed ~= 4096 then
-		losses = losses .. ", air: " .. format01(data.airSpeed)
-	end
-	if data.effectSpeed ~= 4096 then
-		losses = losses .. ", small: " .. format01(data.effectSpeed)
-	end
-	dt(losses)
-	endSection()
-
-	-- Display position
-	dt(data.air .. " (" .. data.framesInAir .. ")")
-	dt(posVecToStr(data.basePos, "X, Z, Y  : "))
-	dt(posVecToStr(data.actualPosDelta, "Delta    : "))
-	local bm = Vector.add(Vector.subtract(data.basePos, data.actualPosDelta), data.basePosDelta)
-	local pod = Vector.subtract(data.objPos, bm)
-	dt(posVecToStr(data.collisionPush, "Collision: "))
-	dt(posVecToStr(pod, "Hitbox   : "))
-	endSection()
-	-- Display angles
-	if config.showAnglesAsDegrees then
-		-- People like this
-		local function atd(a)
-			return (((a / 0x10000) * 360) + 360) % 360
-		end
-		local function ttd(v)
-			local radians = math.atan(v[1], v[3])
-			return radians * 360 / (2 * math.pi)
-		end
-		dt(f("Facing angle: %.3f", atd(data.facingAngle)))
-		local da = atd(data.driftAngle)
-		if da > 180 then da = da - 360 end
-		dt(f("Drift angle: %.3f",  da))
-		dt(f("Movement angle: %.3f (%.3f)", ttd(data.movementDirection), ttd(data.movementTarget)))
-	else
-		-- Suuper likes this
-		dt(f("Angle: %6i + %6i = %6i", data.facingAngle, data.driftAngle, data.facingAngle + data.driftAngle))
-		dt(f("Delta: %6i + %6i = %6i", data.facingDelta, data.driftDelta, data.facingDelta + data.driftDelta))
-		local function tta(v)
-			return f(" (%5.3f)", Vector.get2dMagnitude(v))
-		end
-		dt(normalVectorToStr(data.movementDirection, "Movement: ") .. tta(data.movementDirection))
-		dt(normalVectorToStr(data.movementTarget, "Target  : ") .. tta(data.movementTarget))
-	end
-	dt(f("Pitch: %i (%i, %i)", data.pitch, quaternionAngle(data.snQuaternion), quaternionAngle(data.snqTarget)))
-	endSection()
-	-- surface stuff
-	local n = data.surfaceNormalVector
-	if config.showExactMovement then
-		dt(f("Surface grip: %4i, sp: %4i,", data.grip, data.offroadSpeed))
-	else
-		dt(f("Surface grip: %6.3f, sp: %6.3f,", data.grip, data.offroadSpeed))
-	end
-	local steepness = Vector.get2dMagnitude(n) / (n[2] / 0x1000)
-	steepness = f(", steep: %#.2f", steepness)
-	dt(normalVectorToStr(n, "normal: ") .. steepness)
-	endSection()
-	
-	-- Wall assist
-	if config.showWasbThings then
-		dt(rawQuaternion(data.snQuaternion, "Real:   "))
-		dt(rawQuaternion(data.snqTarget,    "Target: "))
-		endSection()
-	end
-
-	-- Ghost comparison
-	if data.ghost then
-		local distX = data.basePos[1] - data.ghost.basePos[1]
-		local distZ = data.basePos[3] - data.ghost.basePos[3]
-		local dist = math.sqrt(distX * distX + distZ * distZ)
-		dt(f("Distance from ghost (2D): %.0f", dist))
-		endSection()
-	end
-	
-	-- Point comparison
-	if form.comparisonPoint ~= nil then
-		local delta = {
-			data.basePos[1] - form.comparisonPoint[1],
-			data.basePos[3] - form.comparisonPoint[3]
-		}
-		local dist = math.floor(math.sqrt(delta[1] * delta[1] + delta[2] * delta[2]))
-		local angleRad = math.atan(delta[1], delta[2])
-		dt("Distance travelled: " .. dist)
-		dt("Angle: " .. math.floor(angleRad * 0x10000 / (2 * math.pi)))
-		endSection()
-	end
-
-	-- Nearest object
-	if data.nearestObject ~= nil then
-		local obj = data.nearestObject
-		dt(f("Object distance: %.0f (%s, %s)", obj.distance, obj.hitboxType, obj.type or obj.itemName))
-		if config.showRawObjectPositionDelta then
-			dt(posVecToStr(Vector.subtract(obj.objPos, data.objPos), "raw: "))
-		end
-		if obj.distanceComponents ~= nil then
-			if obj.innerDistComps ~= nil then
-				dt(posVecToStr(obj.distanceComponents, "outer: "))
-				dt(posVecToStr(obj.innerDistComps, "inner: "))
-			elseif obj.distanceComponents.v == nil then
-				dt(posVecToStr(obj.distanceComponents))
-			else
-				dt(string.format("%9i, %8i", obj.distanceComponents.h, obj.distanceComponents.v))
+	for i = 1, #textDisplayOptions do
+		if textDisplayOptions[i][2] then
+			local lines = textDisplayOptions[i][3](data)
+			if lines ~= nil then
+				for j = 1, #lines do
+					dt(lines[j])
+				end
+				endSection()
 			end
-		end
-		endSection()
-	end
-
-	-- distance to player?
-	if data.racerId ~= 0 then
-		local pos = data.basePos
-		local playerPos = allRacers[0].basePos
-		local diff = Vector.subtract(pos, playerPos)
-		diff = { diff[1] // 0x1000, diff[2] // 0x1000, diff[3] // 0x1000 }
-		local roughDistance = diff[1] * diff[1] + diff[2] * diff[2] + diff[3] * diff[3]
-		dt(string.format("Dist to player: %.1f", math.sqrt(roughDistance)))
-	end
-	
-	-- bouncy stuff
-	if Vector.getMagnitude(data.bouce_1) ~= 0 then
-		dt(normalVectorToStr(data.bouce_1, "bounce 1: "))
-	end
-	if Vector.getMagnitude(data.bouce_2) ~= 0 then
-		dt(normalVectorToStr(data.bouce_2, "bounce 2: "))
-	end
-	if Vector.getMagnitude(data.bouce_3) ~= 0 then
-		dt(normalVectorToStr(data.bouce_3, "bounce 3: "))
-	end
-	if data.waterfallStrength ~= 0 then
-		dt(normalVectorToStr(Vector.multiply_r(data.waterfallPush, data.waterfallStrength), "waterfall: "))
-	end
-	endSection()
-	
-	-- Display checkpoints
-	if data.checkpoint ~= nil then
-		if (data.spawnPoint > -1) then dt("Spawn Point: " .. data.spawnPoint) end
-		dt(f("Checkpoint number (player) = %i (%i)", data.checkpoint, data.keyCheckpoint))
-		dt("Lap: " .. data.lap)
-		endSection()
-	end
-	
-	-- Coins
-	if raceData.coinsBeingCollected ~= nil and raceData.coinsBeingCollected > 0 then
-		local coinCheckIn = nil
-		if raceData.framesMod8 == 0 then
-			dt("Coin increment this frame")
-		else
-			dt(f("Coin increment in %i frames", 8 - raceData.framesMod8))
-		end
-		endSection()
-	end
-	
-	--y = 37
-	--x = 350
-	-- Display lap time
-	--if data.lap_f then
-	--	dt("Lap: " .. time(data.lap_f))
-	--end
-end
-local roulleteItemNames = { -- The IDs according to the item roullete.
-	"red shell", "banana", "fake item box",
-	"mushroom", "triple mushroom", "bomb",
-	"blue shell", "lightning", "triple greens",
-	"triple banana", "triple reds", "star",
-	"gold mushroom", "bullet bill", "blooper",
-	"boo", "invalid17", "invalid18",
-	"none",
-}
-roulleteItemNames[0] = "green shell"
-local function drawItemInfo(data)
-	if data == nil or data.roulleteItem == nil then return end
-
-	if data.roulleteItem ~= 19 then
-		gui.text(6, 84, roulleteItemNames[data.roulleteItem])
-		if data.roulleteState == 1 then
-			local ttpi = 60 - data.roulleteTimer
-			if ttpi <= 0 then
-				gui.text(6, 100, "stop roullete now")
-			else
-				gui.text(6, 100, string.format("stop in %i frames", ttpi))
-			end
-		elseif data.roulleteState == 2 then
-			local ttpi = 33 - data.roulleteTimer
-			gui.text(6, 100, string.format("use in %i frames", ttpi))
 		end
 	end
 end
@@ -1158,7 +1206,6 @@ local function _mkdsinfo_run_draw(isInRace)
 	if isInRace then
 		if config.showBottomScreenInfo then
 			drawInfoBottomScreen(focusedRacer)
-			drawItemInfo(focusedRacer)
 		end
 
 		-- If the main KCL view is not turned on, we want to show the 
@@ -1360,9 +1407,11 @@ local function setComparisonPointClick()
 		local pos = focusedRacer.basePos
 		form.comparisonPoint = { pos[1], pos[2], pos[3] }
 		forms.settext(form.setComparisonPoint, "Clear comparison point")
+		setTextOption("point comparison", true)
 	else
 		form.comparisonPoint = nil
 		forms.settext(form.setComparisonPoint, "Set comparison point")
+		setTextOption("point comparison", false)
 	end
 end
 local function loadGhostClick()
@@ -1828,6 +1877,65 @@ local function recordPosition()
 	end
 end
 
+local textOptionsForm = nil
+local function showTextOptionsClick()
+	if textOptionsForm == nil then
+		textOptionsForm = {}
+		textOptionsForm.handle = forms.newform(177, #textDisplayOptions * 21 + 32, "Text Options", function()
+			MKDS_INFO_FORM_HANDLES[textOptionsForm.handle] = nil
+			textOptionsForm = nil
+		end)
+		MKDS_INFO_FORM_HANDLES[textOptionsForm.handle] = true
+
+		textOptionsForm.rows = {}
+		local x = 5
+		local y = 3
+		local allBox = forms.checkbox(textOptionsForm.handle, "all", x, y)
+		forms.setproperty(allBox, "Checked", config.showBottomScreenInfo)
+		forms.addclick(allBox, function()
+			config.showBottomScreenInfo = not config.showBottomScreenInfo
+			redraw()
+		end)
+		y = y + 21
+
+		for i = 1, #textDisplayOptions do
+			local b = forms.checkbox(textOptionsForm.handle, textDisplayOptions[i][1], x, y)
+			local opt = textDisplayOptions[i][1]
+			forms.addclick(b, function()
+				local idx = getTextOptionIndex(opt)
+				local on = textDisplayOptions[idx][2]
+				textDisplayOptions[idx][2] = not on
+				redraw()
+			end)
+			forms.setproperty(b, "Checked", textDisplayOptions[i][2])
+
+			local id = i
+			local s = forms.button(textOptionsForm.handle, "swap", function()
+				if textOptionsForm.swapIndex == nil then
+					textOptionsForm.swapIndex = id
+					forms.setproperty(textOptionsForm.rows[id][2], "Text", "----")
+				else
+					forms.setproperty(textOptionsForm.rows[id][1], "Top", textOptionsForm.swapIndex * 21 + 3)
+					forms.setproperty(textOptionsForm.rows[textOptionsForm.swapIndex][1], "Top", (id) * 21 + 3)
+					local temp = textDisplayOptions[id]
+					textDisplayOptions[id] = textDisplayOptions[textOptionsForm.swapIndex]
+					textDisplayOptions[textOptionsForm.swapIndex] = temp
+					temp = textOptionsForm.rows[id][1]
+					textOptionsForm.rows[id][1] = textOptionsForm.rows[textOptionsForm.swapIndex][1]
+					textOptionsForm.rows[textOptionsForm.swapIndex][1] = temp
+
+					forms.setproperty(textOptionsForm.rows[textOptionsForm.swapIndex][2], "Text", "swap")
+					textOptionsForm.swapIndex = nil
+					redraw()
+				end
+			end, x + 116, y - 1, 48, 20)
+
+			textOptionsForm.rows[#textOptionsForm.rows + 1] = { b, s }
+			y = y + 21
+		end
+	end
+end
+
 local bizHawkEventIds = {}
 if MKDS_INFO_FORM_HANDLES == nil then MKDS_INFO_FORM_HANDLES = {} end
 local function _mkdsinfo_close()
@@ -1967,6 +2075,11 @@ local function _mkdsinfo_setup()
 		10, y, 150, 23
 	)
 
+	form.textDisplayOptionsButton = forms.button(
+		form.handle, "text options", showTextOptionsClick,
+		getRight(form.drawUnpausedButton) + labelMargin*2, y, 82, 23
+	)
+
 	-- Collision view
 	y = y + 28
 	temp = forms.label(form.handle, "3D viewing", 10, y + 3)
@@ -2002,6 +2115,7 @@ end
 local hasClosed = false
 
 -- BizHawk ----------------------------
+event.onexit(_mkdsinfo_close)
 local function reloadConfig()
 	config = readConfig()
 	mkdsiConfig = config
