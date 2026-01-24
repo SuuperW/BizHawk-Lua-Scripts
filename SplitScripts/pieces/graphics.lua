@@ -462,6 +462,28 @@ local function makeRacerHitboxes(allRacers, focusedRacer)
 		addToDrawingQue(p, { HITBOX, racer, "spherical", color })
 		lineFromVector(racer.objPos, racer.movementDirection, racer.objRadius, movementColor, 5)
 	end
+
+	if focusedRacer.ptr ~= nil and focusedRacer.isRacer and focusedRacer.racerId ~= 0 then
+		local enemyPtr = memory.read_u32_le(focusedRacer.ptr + 0x310)
+		if enemyPtr ~= nil then
+			local targetPos = Memory.read_pos(enemyPtr + 0x44)
+			local epoi = enemyPtr + 0x08
+			local nextEpoi = memory.read_u32_le(epoi + 0x00)
+			local currentEpoi = memory.read_u32_le(epoi + 0x04)
+			local nextPos = Memory.read_pos(memory.read_u32_le(nextEpoi + 0x18))
+			local currentPos = Memory.read_pos(memory.read_u32_le(currentEpoi + 0x18))
+
+			addToDrawingQue(-99, { LINE, focusedRacer.basePos, targetPos, 0xbbeeeeee })
+			addToDrawingQue(-99, { LINE, currentPos, nextPos, 0xbbeeeeee })
+			local nextNextCount = memory.read_u16_le(nextEpoi + 0x24)
+			for i = 0, nextNextCount - 1 do
+				local nnep = memory.read_u32_le(nextEpoi + 4*i)
+				local p = Memory.read_pos(memory.read_u32_le(nnep + 0x18))
+				addToDrawingQue(-99, { LINE, nextPos, p, 0xbbeeeeee })
+			end
+		end
+	end
+
 end	
 
 local function drawTriangle(tri, d, racer, dotSize, viewport)
@@ -610,6 +632,17 @@ local function makeKclQue(viewport, focusObject, allTriangles, textonly)
 	end
 end
 
+local function makeGlobalsQue()
+	if mkdsi_global_last == nil then return end
+
+	if mkdsi_global_last.lines ~= nil then
+		for i = 1, #mkdsi_global_last.lines do
+			local line = mkdsi_global_last.lines[i]
+			addToDrawingQue(line[1], { LINE, line[2], line[3], line[4] })
+		end
+	end
+end
+
 local function _drawObjectCollision(racer, obj)
 	if obj.skip == true then return end
 
@@ -626,14 +659,28 @@ local function _drawObjectCollision(racer, obj)
 	end
 
 	-- Specials
-	if (obj.typeId == 424 or obj.typeId == 436 or obj.typeId == 437) and racer ~= nil and racer.playerId ~= nil then
+	if (obj.typeId == 424 or obj.typeId == 436 or obj.typeId == 437) and racer ~= nil and racer.racerId ~= nil then
 		-- pinball bumpers
-		local bumpTimer = memory.read_u32_le(obj.ptr + 0x120 + (racer.playerId * 4))
-		if bumpTimer > 29 then
-			local bumpVector = Vector.multiply_r(racer.bounce_2c, obj.objRadius * 2)
+		local bumpTimer = memory.read_u32_le(obj.ptr + 0x120 + (racer.racerId * 4))
+		if bumpTimer > 29 and racer.nearestObject.ptr == obj.ptr then
+			local bpdNormalized = racer.bpdNormalized
+			local racerPos = Vector.subtract(racer.basePos, racer.collisionPush) -- yes, basePos
+			local posDelta = Vector.subtract(racerPos, obj.objPos)
+			local posDeltaDirected = Vector.multiply_t(bpdNormalized, Vector.dotProduct_r(bpdNormalized, posDelta))
+			local tangentialPosDelta = Vector.subtract(posDelta, posDeltaDirected)
+			local verticalBump = Vector.multiply_t(obj.orientation[2], Vector.dotProduct_r(obj.orientation[2], tangentialPosDelta))
+			local horizontalBump = Vector.subtract(tangentialPosDelta, verticalBump)
+			horizontalBump = Vector.normalize_r(horizontalBump, racer.orientation[1])[2]
+			horizontalBump = Vector.multiply_t(horizontalBump, 12 * 0x1000)
+			verticalBump = Vector.subtract(verticalBump, obj.orientation[2])
+			verticalBump = Vector.multiply_t(verticalBump, 0x19a)
+			
+			local bump = Vector.add(horizontalBump, verticalBump)
+			local bumpVector = Vector.multiply(Vector.normalize_float(tangentialPosDelta), obj.objRadius * 1.4 / 0x1000)
 			addToDrawingQue(-1, { LINE, obj.objPos, Vector.add(obj.objPos, bumpVector), 0xffaaffaa })
-			local moveVector = Vector.multiply_r(Vector.normalize_float(racer.basePosDelta), obj.objRadius)
-			addToDrawingQue(-1, { LINE, racer.objPos, Vector.add(racer.objPos, moveVector), 0xffeeeeee })
+
+			local moveVector = Vector.multiply_r(bpdNormalized, obj.objRadius * 1.2)
+			addToDrawingQue(-1, { LINE, racerPos, Vector.add(racerPos, moveVector), 0xffeeeeee })
 		end
 	end
 end
@@ -729,6 +776,8 @@ local function processPackage(camera, package)
 		if camera.drawPaths == true then
 			makePathsQue(package.paths, package.frame)
 		end
+
+		makeGlobalsQue()
 	elseif camera.isPrimary then
 		-- We always show the text for nearest+touched triangles.
 		makeKclQue(camera, thing, (camera.renderAllTriangles and package.allTriangles) or nil, true)

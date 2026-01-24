@@ -113,7 +113,7 @@ end
 --- @param v2 [integer, integer, integer]
 --- @return [integer, integer, integer]
 local function subtract(v1, v2)
-	--if v1 == nil or v1[1] == nil or v2[1] == nil then print(debug.traceback()) end
+	--if v1 == nil or v1[1] == nil or v2 == nil or v2[1] == nil then print(debug.traceback()) end
 	return {
 		v1[1] - v2[1],
 		v1[2] - v2[2],
@@ -164,12 +164,36 @@ local function interpolate(v1, v2, perc)
 	}
 end
 
+local function normalize_r(v, default)
+	local squareMagnitude = v[1] * v[1] + v[2] * v[2] + v[3] * v[3]
+	local doubleMagnitude = math.floor(math.sqrt(squareMagnitude * 4)) -- floor or round?
+	local magnitude = (doubleMagnitude + 1) >> 1
+	if squareMagnitude < 0x10 then
+		if default ~= nil then return { magnitude, default }
+		else return { magnitude, v } end
+	end
+
+	local divresult = math.floor((1 << 56) / squareMagnitude) << 0
+	local reciprocal = doubleMagnitude * divresult
+	local norm = {
+		-- Note: Right shifts are logical, but we need arithmetic. Integer division is equivalent to arithmetic shifting.
+		-- Note: BizHawk's provided bit.arshift works with 32-bit values, so it is not valid here.
+		(((reciprocal * v[1]) // (1 << 32)) + 0x1000) // (1 << 13),
+		(((reciprocal * v[2]) // (1 << 32)) + 0x1000) // (1 << 13),
+		(((reciprocal * v[3]) // (1 << 32)) + 0x1000) // (1 << 13),
+	}
+
+	return { magnitude, norm }
+end
+
+
 _export = {
 	zero = zero,
 	getMagnitude = getMagnitude,
 	get2dMagnitude = get2dMagnitude,
 	distanceSqBetween = distanceSqBetween,
 	normalize_float = normalize_float,
+	normalize_r = normalize_r,
 	dotProduct_float = dotProduct_float,
 	dotProduct_t = dotProduct_t,
 	dotProduct_r = dotProduct_r,

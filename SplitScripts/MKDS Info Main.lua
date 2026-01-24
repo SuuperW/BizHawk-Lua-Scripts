@@ -278,6 +278,7 @@ local function getRacerBasicData(ptr)
 	newData.objRadius = memory.read_s32_le(ptr + 0x1d0)
 	newData.itemRadius = newData.objRadius
 	newData.movementDirection = read_pos(ptr + 0x68)
+	newData.racerId = memory.read_u8(ptr + 0x74)
 
 	return newData
 end
@@ -290,6 +291,7 @@ local function getRacerBasicData2(raw)
 	newData.objRadius = get_s32(raw, 0x1d0)
 	newData.itemRadius = newData.objRadius
 	newData.movementDirection = get_pos(raw, 0x68)
+	newData.racerId = raw[0x74]
 
 	return newData
 end
@@ -298,7 +300,7 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 		error("Attempted to get racer details for nil racer.")
 	end
 
-	local newData = {}
+	local newData = { }
 	newData.isRacer = true
 	-- Read positions and speed
 	newData.basePos = get_pos(allData, 0x80)
@@ -307,6 +309,7 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	newData.itemPos = get_pos(allData, 0x1D8) -- also for racer-racer collision
 	newData.speed = get_s32(allData, 0x2A8)
 	newData.basePosDelta = get_pos(allData, 0xA4)
+	newData.bpdNormalized = get_pos(allData, 0xB0)
 	newData.boostAll = allData[0x238]
 	newData.boostMt = allData[0x23C]
 	newData.verticalVelocity = get_s32(allData, 0x260)
@@ -331,6 +334,9 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	newData.snqTarget = get_quaternion(allData, 0x100)
 	--newData.faQuaternion = get_quaternion(allData, 0xe0)
 	--newData.facingQuatenion = get_quaternion(allData, 0x110)
+	newData.orientation = {
+		get_pos(allData, 0x120),
+	}
 
 	-- Real speed
 	if isSameFrame then
@@ -385,7 +391,7 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	--newData.test = get_s32(allData, 0x1d4)
 	--newData.scale = get_s32(allData, 0xc4)
 	--newData.f230 = get_u32(allData, 0x230)
-	newData.playerId = get_s32(allData, 0x74)
+	newData.racerId = get_s32(allData, 0x74)
 
 	-- Item
 	local itemDataPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo) + 0x210 * allData[0x74]
@@ -875,6 +881,16 @@ local function drawInfoBottomScreen(data)
 			end
 		end
 		endSection()
+	end
+
+	-- distance to player?
+	if data.racerId ~= 0 then
+		local pos = data.basePos
+		local playerPos = allRacers[0].basePos
+		local diff = Vector.subtract(pos, playerPos)
+		diff = { diff[1] // 0x1000, diff[2] // 0x1000, diff[3] // 0x1000 }
+		local roughDistance = diff[1] * diff[1] + diff[2] * diff[2] + diff[3] * diff[3]
+		dt(string.format("Dist to player: %.1f", math.sqrt(roughDistance)))
 	end
 	
 	-- bouncy stuff
@@ -1970,7 +1986,7 @@ local function _mkdsinfo_setup()
 	form.delayCheckbox = forms.checkbox(form.handle, "delay", getRight(temp) + labelMargin, y + 3)
 	forms.setproperty(form.delayCheckbox, "AutoSize", true)
 	forms.addclick(form.delayCheckbox, function() mainCamera.useDelay = not mainCamera.useDelay; redraw() end)
-	forms.setproperty(form.delayCheckbox, "Checked", true)
+	forms.setproperty(form.delayCheckbox, "Checked", mainCamera.useDelay)
 	forms.setproperty(form.delayCheckbox, "Visible", false)
 	if bizhawkVersion > 9 then
 		-- Bug in BizHawk 2.9: We cannot draw on any picturebox if more than one form is open.
@@ -2025,16 +2041,22 @@ local function main()
 			-- User has interrupted the rewind seek.
 			stopSeeking = true
 		end
+		local doframe = false
 		if stopSeeking then
 			client.pause()
 			redrawSeek = nil
 			if not shouldExit then
-				emu.frameadvance()
+				doframe = true
 			else
 				-- The while loop will exit!
 			end
 		else
+			doframe = true
+		end
+		if doframe then
+			mkdsi_global = {}
 			emu.frameadvance()
+			mkdsi_global_last = mkdsi_global
 		end
 
 		if needConfig then

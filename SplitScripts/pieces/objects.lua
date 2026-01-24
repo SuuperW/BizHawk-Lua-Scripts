@@ -11,7 +11,7 @@ end
 
 local ptrObjArray = nil
 local function loadCourseData()
-	ptrObjArray = memory.read_s32_le(Memory.addrs.ptrObjStuff + 0x10)
+	ptrObjArray = memory.read_s32_le(Memory.addrs.ObjStuff + 0x10)
 end
 
 
@@ -441,7 +441,7 @@ end
 
 local allObjects = {}
 local function readObjects()
-	local maxCount = memory.read_u16_le(Memory.addrs.ptrObjStuff + 0x08)
+	local maxCount = memory.read_u16_le(Memory.addrs.ObjStuff + 0x08)
 	local count = 0
 	local itemsThatAreObjs = {}
 
@@ -495,6 +495,9 @@ local function readObjects()
 		elseif flags & FLAG_DYNAMIC == 0 then
 			obj.skip = true
 		end
+		if obj.objPos[1] == -7131786 then
+			print(string.format("%x %i %x", obj.flags, obj.objPos[1], ptrObjArray + current + 0x14))
+		end
 		newObjectsTable[objPtr] = obj
 		list[#list + 1] = obj
 
@@ -515,7 +518,7 @@ local function readObjects()
 				newObjectsTable[itemPtr] = {
 					ptr = itemPtr,
 					flags = FLAG_ITEM,
-					skip = itemFlags & 0x0080000 ~= 0, -- Idk what these flags mean
+					skip = false, --itemFlags & 0x0080000 ~= 0, -- Idk what these flags mean
 					itemFlags = itemFlags,
 					-- others set were 0x0020080
 					objPos = read_pos(itemPtr + 0x50)
@@ -524,7 +527,7 @@ local function readObjects()
 			else
 				local itemFlags = memory.read_u32_le(itemPtr + 0x74)
 				local obj = newObjectsTable[itemPtr]
-				obj.skip = obj.skip or (itemFlags & 0x0080000 ~= 0)
+				--obj.skip = obj.skip or (itemFlags & 0x0080000 ~= 0)
 				obj.itemFlags = itemFlags
 				itemsThatAreObjs[itemPtr] = nil
 			end
