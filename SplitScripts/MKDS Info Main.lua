@@ -282,7 +282,7 @@ local function getRacerBasicData(ptr)
 	return newData
 end
 local function getRacerBasicData2(raw)
-	local newData = { isRacer = true }
+	local newData = { isRacer = true, racerData = raw }
 	newData.basePos = get_pos(raw, 0x80)
 	newData.objPos = get_pos(raw, 0x1b8)
 	newData.preMovementObjPos = get_pos(raw, 0x1C4)
@@ -299,7 +299,7 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 		error("Attempted to get racer details for nil racer.")
 	end
 
-	local newData = { }
+	local newData = { racerData = allData }
 	newData.isRacer = true
 	-- Read positions and speed
 	newData.basePos = get_pos(allData, 0x80)
@@ -833,14 +833,24 @@ local textDisplayOptions = {
 			normalVectorToStr(n, "normal: ") .. steepness,
 		}
 	end },
-	{ "playerDistance", true, function(data)
+	{ "enemy data", true, function(data)
 		if data.racerId ~= 0 then
 			local pos = data.basePos
 			local playerPos = allRacers[0].basePos
 			local diff = Vector.subtract(pos, playerPos)
 			diff = { diff[1] // 0x1000, diff[2] // 0x1000, diff[3] // 0x1000 }
 			local roughDistance = diff[1] * diff[1] + diff[2] * diff[2] + diff[3] * diff[3]
-			return string.format("Dist to player: %.1f", math.sqrt(roughDistance))
+			local lines = { string.format("Dist to player: %.1f", math.sqrt(roughDistance)) }
+			if data.racerData[0x48 + 3] & 0x08 ~= 0 then
+				lines[1] = lines[1] .. " (FAR)"
+			end
+			-- racerData.3.enemyState.fieldA8
+			local enemyPtr = get_u32(data.racerData, 0x310)
+			local rescueState = memory.read_u8(enemyPtr + 0xA8)
+			if rescueState ~= 0 then
+				lines[#lines + 1] = "Rescue state: " .. rescueState
+			end
+			return lines
 		else
 			return nil
 		end
@@ -856,7 +866,7 @@ local textDisplayOptions = {
 			local distX = data.basePos[1] - data.ghost.basePos[1]
 			local distZ = data.basePos[3] - data.ghost.basePos[3]
 			local dist = math.sqrt(distX * distX + distZ * distZ)
-			return string.format("Distance from ghost (2D): %.0f", dist)
+			return { string.format("Distance from ghost (2D): %.0f", dist) }
 		else
 			return nil
 		end
@@ -975,7 +985,7 @@ local function drawInfoBottomScreen(data)
 	local b = true
 	local function dt(s)
 		if s == nil then
-			print("drawing nil at y " .. y)
+			return -1
 		end
 		gui.text(x + iView.x, y + iView.y, s)
 		y = y + lineHeight
@@ -1003,7 +1013,7 @@ local function drawInfoBottomScreen(data)
 			local lines = textDisplayOptions[i][3](data)
 			if lines ~= nil then
 				for j = 1, #lines do
-					dt(lines[j])
+					if dt(lines[j]) == -1 then error("nil text from " .. textDisplayOptions[i][1].. ":" .. j) end
 				end
 				endSection()
 			end
@@ -2091,6 +2101,7 @@ local function _mkdsinfo_setup()
 		mainCamera.active = not mainCamera.active
 		if mainCamera.active then
 			forms.setproperty(form.handle, "Height", yesKclHeight + borderHeight)
+			_changePerspective(mainCamera)
 		else
 			forms.setproperty(form.handle, "Height", noKclHeight + borderHeight)
 		end

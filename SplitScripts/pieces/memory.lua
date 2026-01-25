@@ -24,7 +24,7 @@ local addrs = {
 	ptrSceneState = 0x021759ac + ptrOffset, -- scene_state_t*
 	-- Code and DTCM, will not have the same ptrOffset. (E and U versions are the same)
 	camHackCodeAddr = 0x207AA24,
-	ptrItemSets = 0x27E00CC,
+	ptrItemSets = 0x27E00CC, -- it_itemset_t*
 }
 ---------------------------------------
 -- These have the same address in E and U versions.

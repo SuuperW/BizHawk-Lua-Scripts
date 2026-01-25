@@ -325,11 +325,15 @@ local function processQue(camera)
 							makeCircle(point2D, radius, color, color)
 						end
 					else
-						makeCircle(point2D, radius, color, color)
+						local fill = color
+						if object.objRadius > 0xd000 then fill = color & 0x3fffffff end
+						makeCircle(point2D, radius, color, fill)
 					end
 				elseif hitboxType == "item" then
+					local fill = color
+					if object.itemRadius > 0xd000 then fill = color & 0x3fffffff end
 					local radius = scaleAtDistance(object.itemPos, object.itemRadius, camera)
-					makeCircle(point3Dto2D(object.itemPos, camera), radius, color, color)
+					makeCircle(point3Dto2D(object.itemPos, camera), radius, color, fill)
 				-- elseif hitboxType == "cylindrical" then
 					-- Drawn as either a circle (spherical above), or as polygons below
 				end
@@ -338,7 +342,7 @@ local function processQue(camera)
 						object.polygons = object.polygons()
 						if #object.polygons == 0 then error("Got no polygons.") end
 					end
-					local fill = color
+					local fill = color & 0x3fffffff
 					if object.cylinder2 == true or hitboxType == "cylindrical" then
 						fill = nil
 					end
@@ -431,9 +435,6 @@ end
 local function makeRacerHitboxes(allRacers, focusedRacer)
 	local count = #allRacers
 	local isTT = count <= 2
-	-- Not the best TT detection. But, if we are in TT mode we want to only show for-triangle hitboxes!
-	-- Outside of TT, non-player hitboxes will be drawn as objects instead.
-	if not isTT then count = 0 end
 
 	-- Primary hitbox circle is blue
 	local color = 0xff0000ff

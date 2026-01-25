@@ -514,23 +514,19 @@ local function readObjects()
 		for i = 0, setCount - 1 do
 			local itemPtr = memory.read_u32_le(setPtr + i*4)
 			if itemsThatAreObjs[itemPtr] == nil then
-				local itemFlags = memory.read_u32_le(itemPtr + 0x74)
 				newObjectsTable[itemPtr] = {
 					ptr = itemPtr,
 					flags = FLAG_ITEM,
-					skip = false, --itemFlags & 0x0080000 ~= 0, -- Idk what these flags mean
-					itemFlags = itemFlags,
-					-- others set were 0x0020080
-					objPos = read_pos(itemPtr + 0x50)
+					objPos = read_pos(itemPtr + 0x50),
 				}
 				list[#list + 1] = newObjectsTable[itemPtr]
 			else
-				local itemFlags = memory.read_u32_le(itemPtr + 0x74)
-				local obj = newObjectsTable[itemPtr]
-				--obj.skip = obj.skip or (itemFlags & 0x0080000 ~= 0)
-				obj.itemFlags = itemFlags
 				itemsThatAreObjs[itemPtr] = nil
 			end
+			local obj = newObjectsTable[itemPtr]
+			obj.itemFlags = memory.read_u32_le(itemPtr + 0x74)
+			obj.colEntryId = memory.read_s16_le(itemPtr + 0xda)
+			obj.skip = obj.colEntryId == -1
 		end
 	end
 
