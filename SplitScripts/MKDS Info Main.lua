@@ -277,6 +277,7 @@ local function getRacerBasicData(ptr)
 	newData.objRadius = memory.read_s32_le(ptr + 0x1d0)
 	newData.itemRadius = newData.objRadius
 	newData.movementDirection = read_pos(ptr + 0x68)
+	newData.movementTarget = read_pos(ptr + 0x50)
 	newData.racerId = memory.read_u8(ptr + 0x74)
 
 	return newData
@@ -290,6 +291,7 @@ local function getRacerBasicData2(raw)
 	newData.objRadius = get_s32(raw, 0x1d0)
 	newData.itemRadius = newData.objRadius
 	newData.movementDirection = get_pos(raw, 0x68)
+	newData.movementTarget = get_pos(raw, 0x50)
 	newData.racerId = raw[0x74]
 
 	return newData
@@ -678,6 +680,7 @@ local function _mkdsinfo_run_data(isSameFrame)
 	-- FAKE ghost
 	if fakeGhostData[fgFrame] ~= nil then
 		newRacers[racerCount] = getRacerBasicData2(fakeGhostData[fgFrame])
+		newRacers[racerCount].fake = true
 		recordedPaths[racerCount + 1].path[raceFrame] = newRacers[racerCount].objPos
 	end
 	fakeGhostExists = false
@@ -735,7 +738,7 @@ roulleteItemNames[0] = "green shell"
 
 local iView = {}
 local textDisplayOptions = {
-	{ "speed", true, function(data)
+	{ "speed", true, function(data, _)
 		local wallClip = data.wallSpeedMult
 		local losses = "turnLoss: " .. format01(data.turnLoss)
 		if wallClip ~= 4096 or data.flags44 & 0xc0 ~= 0 then
@@ -938,17 +941,10 @@ local textDisplayOptions = {
 			return nil
 		end
 	end },
-	{ "coins", true, function(data)
-		if raceData.coinsBeingCollected ~= nil and raceData.coinsBeingCollected > 0 then
-			local coinCheckIn = nil
-			if raceData.framesMod8 == 0 then
-				return { "Coin increment this frame" }
-			else
-				return { string.format("Coin increment in %i frames", 8 - raceData.framesMod8) }
-			end
-		else
-			return nil
-		end
+	{ "8th frame", true, function(data, race)
+		local lines = {}
+		local framesUntil = (8 - ((race.framesMod8 + 8 - data.racerId) % 8)) % 8
+		return { "8th frame in: " .. framesUntil }
 	end },
 	{ "lap time", false, function(data)
 		if data.lap_f then
@@ -1010,7 +1006,7 @@ local function drawInfoBottomScreen(data)
 
 	for i = 1, #textDisplayOptions do
 		if textDisplayOptions[i][2] then
-			local lines = textDisplayOptions[i][3](data)
+			local lines = textDisplayOptions[i][3](data, raceData)
 			if lines ~= nil then
 				for j = 1, #lines do
 					if dt(lines[j]) == -1 then error("nil text from " .. textDisplayOptions[i][1].. ":" .. j) end
@@ -1036,6 +1032,7 @@ local function makeDefaultViewport()
 		racerId = 0,
 		drawKcl = true,
 		drawObjects = true,
+		drawEnemys = false,
 		active = true,
 		renderAllTriangles = config.renderAllTriangles,
 		backfaceCulling = config.backfaceCulling,
@@ -1417,12 +1414,12 @@ local function setComparisonPointClick()
 		local pos = focusedRacer.basePos
 		form.comparisonPoint = { pos[1], pos[2], pos[3] }
 		forms.settext(form.setComparisonPoint, "Clear comparison point")
-		setTextOption("point comparison", true)
 	else
 		form.comparisonPoint = nil
 		forms.settext(form.setComparisonPoint, "Set comparison point")
-		setTextOption("point comparison", false)
 	end
+	local index = getTextOptionIndex("point comparison")
+	textDisplayOptions[index][2] = form.comparisonPoint ~= nil
 end
 local function loadGhostClick()
 	local fileName = forms.openfile(nil,nil,"TAStudio Macros (*.bk2m)|*.bk2m|All Files (*.*)|*.*")
@@ -1772,6 +1769,9 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 	temp = forms.checkbox(kclForm, "paths", x, y)
 	forms.setproperty(temp, "AutoSize", true)
 	forms.addclick(temp, function() viewport.drawPaths = not viewport.drawPaths; redraw(); end)
+	temp = forms.checkbox(kclForm, "enemys", x + 70, y)
+	forms.setproperty(temp, "AutoSize", true)
+	forms.addclick(temp, function() viewport.drawEnemys = not viewport.drawEnemys; redraw(); end)
 
 	y = y + 21
 	y = y + 4 -- bottom padding

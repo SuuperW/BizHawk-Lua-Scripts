@@ -350,13 +350,14 @@ local function processQue(camera)
 						color = 0xffffffff
 					end
 					-- We separate fill and outline draws because BizHawk's draw system has issues.
-					if fill ~= nil then
-						for j = 1, #object.polygons do
-							makePolygon(object.polygons[j], nil, fill)
-						end
-					end
+					-- Then again, it isn't worth the major performance penalty.
+					-- if fill ~= nil then
+					-- 	for j = 1, #object.polygons do
+					-- 		makePolygon(object.polygons[j], nil, fill)
+					-- 	end
+					-- end
 					for j = 1, #object.polygons do
-						makePolygon(object.polygons[j], color, nil)
+						makePolygon(object.polygons[j], color, fill)
 					end
 				end
 			elseif v[1] == LINE then
@@ -432,7 +433,7 @@ local function processQue(camera)
 	return ops
 end
 
-local function makeRacerHitboxes(allRacers, focusedRacer)
+local function drawRacers(allRacers, focusedRacer, showEnemyDetails)
 	local count = #allRacers
 	local isTT = count <= 2
 
@@ -445,26 +446,56 @@ local function makeRacerHitboxes(allRacers, focusedRacer)
 		local pos = racer.itemPos
 		local radius = racer.itemRadius
 		local type = "item"
-		if racer == focusedRacer or isTT then
+		if racer == focusedRacer or isTT or racer.fake == true then
 			pos = racer.objPos
 			radius = racer.objRadius
 			type = "spherical"
 		end
 		addToDrawingQue(p, { HITBOX, racer, type, color })
 		lineFromVector(pos, allRacers[i].movementDirection, radius, movementColor, 5)
+		-- slipstream
+		if showEnemyDetails then
+			local objStuff = memory.read_s32_le(Memory.addrs.ObjStuff + 0x10)
+			local colId = 0
+			if racer.racerData ~= nil then colId = racer.racerData[0x2c8]
+			else colId = memory.read_u8(racer.ptr + 0x2c8) end
+			pos = Memory.read_pos(memory.read_u32_le(objStuff + 0x1c*colId + 0xC))
+			local size = memory.read_s32_le(objStuff + 0x1c*colId + 0x10)
+			if racer ~= focusedRacer then
+				if racer.racerData ~= nil then colId = racer.racerData[0x2ca]
+				else colId = memory.read_u8(racer.ptr + 0x2ca) end
+				pos = Memory.read_pos(memory.read_u32_le(objStuff + 0x1c*colId + 0xC))
+				size = memory.read_s32_le(objStuff + 0x1c*colId + 0x10)
+			end
+			local sv = {
+				{ pos[1] + size, pos[2], pos[3] + size },
+				{ pos[1] + size, pos[2], pos[3] - size },
+				{ pos[1] - size, pos[2], pos[3] - size },
+				{ pos[1] - size, pos[2], pos[3] + size },
+			}
+			addToDrawingQue(p, { POLYGON, sv, 0xff00ee00, nil })
+			-- slipstream area
+			if racer ~= focusedRacer then
+				local radians = 0.43704618
+				local slipAngle = math.atan(-racer.movementTarget[3], -racer.movementTarget[1])
+				local angle1 = slipAngle + radians
+				local angle2 = slipAngle - radians
+				size = size * 1.8
+				local lines = {
+					{ math.cos(angle1) * size, 0, math.sin(angle1) * size },
+					{ math.cos(angle2) * size, 0, math.sin(angle2) * size },
+				}
+				local points = { racer.basePos, Vector.add(racer.basePos, lines[1]), Vector.add(racer.basePos, lines[2]) }
+				addToDrawingQue(p, { POLYGON, points, 0xaa00ee00, nil })
+			end
+		end
 		-- Others are a translucent red
 		color = 0x48ff5080
 		movementColor = 0xcccccccc
 		p = -1
 	end
 
-	if not isTT and focusedRacer ~= allRacers[0] and focusedRacer ~= nil and focusedRacer.isRacer then
-		local racer = focusedRacer
-		addToDrawingQue(p, { HITBOX, racer, "spherical", color })
-		lineFromVector(racer.objPos, racer.movementDirection, racer.objRadius, movementColor, 5)
-	end
-
-	if focusedRacer.ptr ~= nil and focusedRacer.isRacer and focusedRacer.racerId ~= 0 then
+	if showEnemyDetails and focusedRacer.ptr ~= nil and focusedRacer.isRacer and focusedRacer.racerId ~= 0 then
 		local enemyPtr = memory.read_u32_le(focusedRacer.ptr + 0x310)
 		if enemyPtr ~= nil then
 			local targetPos = Memory.read_pos(enemyPtr + 0x44)
@@ -484,7 +515,6 @@ local function makeRacerHitboxes(allRacers, focusedRacer)
 			end
 		end
 	end
-
 end	
 
 local function drawTriangle(tri, d, racer, dotSize, viewport)
@@ -769,7 +799,7 @@ local function processPackage(camera, package)
 			makeObjectsQue(thing)
 		end
 		if camera.drawKcl == true or camera.drawObjects == true then
-			makeRacerHitboxes(package.allRacers, thing)
+			drawRacers(package.allRacers, thing, camera.drawEnemys)
 		end
 		if camera.drawCheckpoints == true then
 			makeCheckpointsQue(package.checkpoints, thing, package)
@@ -783,7 +813,7 @@ local function processPackage(camera, package)
 		-- We always show the text for nearest+touched triangles.
 		makeKclQue(camera, thing, (camera.renderAllTriangles and package.allTriangles) or nil, true)
 		if camera.drawRacers == true then
-			makeRacerHitboxes(package.allRacers, thing)
+			drawRacers(package.allRacers, thing, false)
 		end
 	end
 
