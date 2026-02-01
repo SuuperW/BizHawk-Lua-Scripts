@@ -293,6 +293,7 @@ local function getRacerBasicData2(raw)
 	newData.movementDirection = get_pos(raw, 0x68)
 	newData.movementTarget = get_pos(raw, 0x50)
 	newData.racerId = raw[0x74]
+	newData.colEntryId = raw[0x2c8]
 
 	return newData
 end
@@ -393,6 +394,7 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	--newData.scale = get_s32(allData, 0xc4)
 	--newData.f230 = get_u32(allData, 0x230)
 	newData.racerId = get_s32(allData, 0x74)
+	newData.colEntryId = allData[0x2c8]
 
 	-- Item
 	local itemDataPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo) + 0x210 * allData[0x74]
@@ -643,7 +645,9 @@ local function _mkdsinfo_run_data(isSameFrame)
 	end
 
 	allObjects = Objects.readObjects()
-	focusedRacer.nearestObject = Objects.getNearbyObjects(focusedRacer, config.objectRenderDistance)[2]
+	local queryResult = Objects.getObjectDistances(Objects.queryObjects(focusedRacer.colEntryId), focusedRacer)
+	focusedRacer.nearestObject = queryResult[2]
+	focusedRacer.touchedObjects = queryResult[1]
 
 	-- Ghost handling
 	if form.ghostInputs ~= nil then
@@ -890,11 +894,15 @@ local textDisplayOptions = {
 			return { "point not set" }
 		end
 	end },
-	{ "nearestObject", true, function(data)
-		if data.nearestObject ~= nil then
-			local obj = data.nearestObject
-			local lines = {}
-			lines[1] = string.format("Object distance: %.0f (%s, %s)", obj.distance, obj.hitboxType, obj.type or obj.itemName)
+	{ "objects", true, function(data)
+		if data.nearestObject == nil then return nil end
+
+		local list = data.touchedObjects
+		if #list == 0 then list = { data.nearestObject } end
+		local lines = { }
+		for i = 1, #list do
+			local obj = list[i]
+			lines[#lines+1] = string.format("Object distance: %.0f (%s, %s)", obj.distance, obj.hitboxType, obj.type or obj.itemName)
 			if config.showRawObjectPositionDelta then
 				lines[#lines + 1] = posVecToStr(Vector.subtract(obj.objPos, data.objPos), "raw: ")
 			end
@@ -908,10 +916,8 @@ local textDisplayOptions = {
 					lines[#lines + 1] = string.format("%9i, %8i", obj.distanceComponents.h, obj.distanceComponents.v)
 				end
 			end
-			return lines
-		else
-			return nil
 		end
+		return lines
 	end },
 	{ "extra momentum", true, function(data)
 		local lines = {}

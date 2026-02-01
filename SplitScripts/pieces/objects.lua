@@ -440,6 +440,7 @@ local function getObjectDetails(obj)
 end
 
 local allObjects = {}
+local rawColEntryList = {}
 local function readObjects()
 	local maxCount = memory.read_u16_le(Memory.addrs.ObjStuff + 0x08)
 	local count = 0
@@ -448,13 +449,13 @@ local function readObjects()
 	-- get basic info
 	local newObjectsTable = {}
 	local list = {}
-	local objData = memory.read_bytes_as_array(ptrObjArray + 1, 0x1c * 255 - 1)
-	--objData[0] = memory.read_u8(ptrObjArray)
+	rawColEntryList = memory.read_bytes_as_array(ptrObjArray + 1, 0x1c * 255 - 1)
+	--rawColEntryList[0] = memory.read_u8(ptrObjArray)
 	local id = 0
 	while id < 255 and count ~= maxCount do -- 255? What is max max?
 		local current = id * 0x1c
-		local objPtr = get_u32(objData, current + 0x18)
-		local flags = get_u16(objData, current + 0x14)
+		local objPtr = get_u32(rawColEntryList, current + 0x18)
+		local flags = get_u16(rawColEntryList, current + 0x14)
 		-- local declarations must be made before all gotos
 		local posPtr
 		local obj
@@ -468,7 +469,7 @@ local function readObjects()
 		if flags & 0x200 ~= 0 then
 			goto continue
 		end
-		posPtr = get_s32(objData, current + 0xC)
+		posPtr = get_s32(rawColEntryList, current + 0xC)
 		if posPtr == 0 then
 			-- Apparently this is a way that the game "removes" an object from the list.
 			goto continue
@@ -477,6 +478,7 @@ local function readObjects()
 		obj = {
 			id = id,
 			objPos = read_pos(posPtr),
+			boundingSize = get_u32(rawColEntryList, current + 0x10),
 			flags = flags,
 			ptr = objPtr,
 			skip = false,
@@ -494,9 +496,6 @@ local function readObjects()
 			itemsThatAreObjs[objPtr] = true
 		elseif flags & FLAG_DYNAMIC == 0 then
 			obj.skip = true
-		end
-		if obj.objPos[1] == -7131786 then
-			print(string.format("%x %i %x", obj.flags, obj.objPos[1], ptrObjArray + current + 0x14))
 		end
 		newObjectsTable[objPtr] = obj
 		list[#list + 1] = obj
@@ -526,7 +525,12 @@ local function readObjects()
 			local obj = newObjectsTable[itemPtr]
 			obj.itemFlags = memory.read_u32_le(itemPtr + 0x74)
 			obj.colEntryId = memory.read_s16_le(itemPtr + 0xda)
-			obj.skip = obj.colEntryId == -1
+			if obj.colEntryId ~= -1 then
+				obj.skip = false
+				obj.boundingSize = Memory.get_u32(rawColEntryList, obj.colEntryId * 0x1C + 0x10)	
+			else
+				obj.skip = true
+			end
 		end
 	end
 
@@ -538,38 +542,40 @@ local function readObjects()
 	allObjects.list = list
 	return allObjects
 end
-local function getNearbyObjects(thing, dist)
-	local distdist = dist * dist
+local function queryObjects(collisionEntry)
+	if type(collisionEntry) == "number" then
+		local offset = 0x1c * collisionEntry
+		local posPtr = Memory.get_u32(rawColEntryList, offset + 0xC)
+		if posPtr == 0 then return {} end
+		collisionEntry = {
+			position = Memory.read_pos(posPtr),
+			size = Memory.get_s32(rawColEntryList, offset + 0x10),
+			objPtr = Memory.get_u32(rawColEntryList, offset + 0x18),
+		}
+	end
 
-	local nearbyObjects = {}
-	for _, obj in pairs(allObjects.list) do
-		if obj.skip == false and obj.ptr ~= thing.ptr then
-			local flags = obj.flags
+	local left = collisionEntry.position[1] - collisionEntry.size
+	local right = collisionEntry.position[1] + collisionEntry.size
+	local top = collisionEntry.position[3] - collisionEntry.size
+	local bottom = collisionEntry.position[3] + collisionEntry.size
 
-			local racerPos = thing.objPos
-			if flags & (FLAG_ITEM | FLAG_RACER) ~= 0 then
-				racerPos = thing.itemPos
-			end
-			local dx = racerPos[1] - obj.objPos[1]
-			local dz = racerPos[3] - obj.objPos[3]
-			local d = dx * dx + dz * dz
-			if d <= distdist then
-				nearbyObjects[#nearbyObjects + 1] = obj
-			else
-				if (obj.typeId == 209 and d <= 9e13) or (obj.typeId == 11 and d < 1.2e13) or (obj.typeId == 205 and d < 1e13) then
-					-- obj 209: rotating bridge in Bowser's Castle: it's huge
-					-- obj 205: TTC clock hands
-					-- obj 11: stop signage, they are huge boxes
-					nearbyObjects[#nearbyObjects + 1] = obj
-				end
-			end
-		end -- if skip
-	end -- for
-
-	for i = 1, #nearbyObjects do
-		local obj = nearbyObjects[i]
-
-		getObjectDetails(obj)
+	local results = {}
+	for i, v in ipairs(allObjects.list) do
+		if not v.skip
+		  and v.ptr ~= collisionEntry.objPtr
+		  and left <= v.objPos[1] + v.boundingSize
+		  and right >= v.objPos[1] - v.boundingSize
+		  and top <= v.objPos[3] + v.boundingSize
+		  and bottom >= v.objPos[3] - v.boundingSize then
+			getObjectDetails(v)
+			results[#results+1] = v
+		end
+	end
+	return results
+end
+local function getObjectDistances(objects, thing)
+	for i = 1, #objects do
+		local obj = objects[i]
 
 		if obj.hitboxType == "cylindrical" then
 			obj.distanceComponents = getCylinderDistances(obj, thing.objPos, thing.objRadius)
@@ -606,24 +612,24 @@ local function getNearbyObjects(thing, dist)
 		end
 	end
 
-	local realNearby = {}
 	local nearest = nil
-	for i = 1, #nearbyObjects do
-		local obj = nearbyObjects[i]
-		if obj.distance <= dist then
-			realNearby[#realNearby+1] = obj
-			if nearest == nil or obj.distance < nearest.distance then
-				nearest = obj
-			end
+	local touching = {}
+	for i = 1, #objects do
+		if nearest == nil or objects[i].distance < nearest.distance then
+			nearest = objects[i]
+		end
+		if objects[i].distance <= 0 then -- <= or just <?
+			touching[#touching+1] = objects[i]
 		end
 	end
 
-	return { realNearby, nearest }
+	return { touching, nearest }
 end
 
 _export = {
 	loadCourseData = loadCourseData,
-	getNearbyObjects = getNearbyObjects,
+	queryObjects = queryObjects,
+	getObjectDistances = getObjectDistances,
 	isGhost = isGhost,
 	getBoxyPolygons = getBoxyPolygons,
 	mapObjTypes = mapObjTypes,

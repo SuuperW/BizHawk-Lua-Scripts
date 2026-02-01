@@ -674,21 +674,21 @@ local function makeGlobalsQue()
 	end
 end
 
-local function _drawObjectCollision(racer, obj)
+local function drawObjectCollision(obj)
 	if obj.skip == true then return end
 
 	local objColor = 0xff40c0e0
 	if obj.typeId == 106 then objColor = 0xffffff11 end
 	addToDrawingQue(-4, { HITBOX, obj, obj.hitboxType, objColor })
+end
+local function drawCollisionPair(racer, obj)
 	if obj.hitboxType == "spherical" or obj.hitboxType == "item" then
 		-- White circles to indicate size of hitbox cross-section at the current elevation.
-		if racer ~= nil then
-			addToDrawingQue(-1, { HITBOX_PAIR, obj, racer })
-		end
-	elseif obj.hitboxType == "boxy" and racer ~= nil then
+		addToDrawingQue(-1, { HITBOX_PAIR, obj, racer })
+	elseif obj.hitboxType == "boxy" then
 		addToDrawingQue(-2, { HITBOX_PAIR, obj, racer })
 	end
-
+	
 	-- Specials
 	if (obj.typeId == 424 or obj.typeId == 436 or obj.typeId == 437) and racer ~= nil and racer.racerId ~= nil then
 		-- pinball bumpers
@@ -715,21 +715,25 @@ local function _drawObjectCollision(racer, obj)
 		end
 	end
 end
-local function makeObjectsQue(focusObject)
+local function makeObjectsQue(focusObject, camera)
 	if focusObject == nil then error("Attempted to draw objects with no focus.") end
-	local nearby = Objects.getNearbyObjects(focusObject, mkdsiConfig.objectRenderDistance)
-	local objects = nearby[1]
-	local nearest = nearby[2]
+	local objects = Objects.queryObjects({
+		position = camera.location,
+		size = camera.scale * math.max(camera.w, camera.h),
+		objPtr = focusObject.ptr,
+	})
 	for i = 1, #objects do
-		if objects[i] == nearest then
-			_drawObjectCollision(focusObject, objects[i])
-		else
-			_drawObjectCollision(nil, objects[i])
-		end
+		drawObjectCollision(objects[i])
 	end
 	-- A focused racer will have a KCL hitbox drawn. Other things won't.
 	if not focusObject.isRacer then
-		_drawObjectCollision(nil, focusObject)
+		drawObjectCollision(focusObject)
+	end
+	local result = Objects.getObjectDistances(objects, focusObject)
+	local list = result[1]
+	if #list == 0 then list = { result[2] } end
+	for i = 1, #list do
+		drawCollisionPair(focusObject, list[i])
 	end
 end
 
@@ -796,7 +800,7 @@ local function processPackage(camera, package)
 			makeKclQue(camera, thing, (camera.renderAllTriangles and package.allTriangles) or nil)
 		end
 		if camera.drawObjects == true then
-			makeObjectsQue(thing)
+			makeObjectsQue(thing, camera)
 		end
 		if camera.drawKcl == true or camera.drawObjects == true then
 			drawRacers(package.allRacers, thing, camera.drawEnemys)
