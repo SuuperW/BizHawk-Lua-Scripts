@@ -2,6 +2,7 @@ local maxChanges = 999 -- Set how many changes the script will check up to. If t
 local enableRngHack = false -- if true, touch input coordinates will hack RNG (Y = 1, X = number of states to advance)
 local drawLocation = { x = 340, y = 360 }
 
+local rngState = nil
 local prevRng = nil
 local totalChanges = nil
 local trackingSince = nil
@@ -39,6 +40,10 @@ local randomRng = readRngContext(race_status_ptr + 0x498)
 local stableRng = readRngContext(race_status_ptr + 0x4b0)
 
 local rngToWatch = safeRng
+
+if safeRng.mul ~= 6726279311198226789 or safeRng.add ~= 2531011 then
+	print("Looks like you may have started the script when the generator wasn't initialized.")
+end
 
 local function nextRngValue(value, context)
 	-- Lua does 64-bit integer math!
@@ -109,7 +114,7 @@ local function restoreFromHistory()
 		return true
 	end
 	
-	local haveHistory = history[frame] ~= nil
+	local haveHistory = type(history[frame]) == "number"
 	for i = 1, #begins do
 		local startFrame = begins[i].frame
 		local endFrame = 0xffffffff
@@ -125,7 +130,6 @@ local function restoreFromHistory()
 				-- Validate
 				local computed = getChangeCount(begins[i].value, read_u64(rngToWatch.ptr), totalChanges)
 				if computed.changes ~= totalChanges then
-					print(computed.changes, totalChanges)
 					return false
 				end
 				return true
@@ -142,7 +146,7 @@ end
 
 local function runNormalRngCheck()
 	memory.usememorydomain("ARM9 System Bus")
-	local rngState = read_u64(rngToWatch.ptr)
+	rngState = read_u64(rngToWatch.ptr)
 	local _ = getChangeCount(prevRng, rngState, maxChanges)
 	local changes = _.changes
 	local computed = _.computed
@@ -158,9 +162,13 @@ local function runNormalRngCheck()
 			print(changes)
 			print(rngState)
 			print(prevRng)
-			error("Unable to compute RNG state change.")
 			initialize()
+			error("Unable to compute RNG state change.")
 		end
+	else
+		-- New beginning
+		newBeginning(currentBegin + 1)
+		history[emu.framecount() - 1] = "seed"
 	end
 end
 
@@ -171,17 +179,21 @@ local function fn()
 		runNormalRngCheck()
 		doRngHack()
 		if #begins > currentBegin and begins[currentBegin + 1].frame == frame then
-			-- combine them
-			for i = currentBegin + 1, #begins - 1 do
-				begins[i] = begins[i + 1]
+			-- combine them?
+			if begins[currentBegin + 1].value == rngState then
+				for i = currentBegin + 1, #begins - 1 do
+					begins[i] = begins[i + 1]
+				end
+				begins[#begins] = nil
+			else
+				currentBegin = currentBegin + 1
 			end
-			begins[#begins] = nil
 		end
 	else
 		local matchesHistory = restoreFromHistory()
 		if not matchesHistory then
-			error("RNG history mismatch.")
 			initialize()
+			error("RNG history mismatch.")
 		end
 	end
 	
