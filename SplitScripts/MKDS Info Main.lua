@@ -603,6 +603,23 @@ local function getFakeCameraData(target, camera)
 	}
 end
 
+local characterNames = {
+	             "DK",    "Toad",    "Bowser",
+	"Peach",     "Wario", "Yoshi",   "Luigi",
+	"Dry Bones", "Daisy", "Waluigi", "ROB",
+	"Shy Guy"
+}
+characterNames[0] = "Mario"
+local function getRacerName(racer)
+	local charIdPtr = nil
+	if racer.ptr ~= 0 then
+		charIdPtr = memory.read_u32_le(racer.ptr + 0x590)		
+	else
+		charIdPtr = get_u32(racer.racerData, 0x590)
+	end
+	return characterNames[memory.read_u8(charIdPtr)]
+end
+
 -- Main info function
 local function _mkdsinfo_run_data(isSameFrame)
 	racerCount = memory.read_s32_le(Memory.addrs.racerCount)
@@ -1035,6 +1052,7 @@ local function makeDefaultViewport()
 		perspectiveId = -5, -- top down
 		overlay = false,
 		drawCheckpoints = false,
+		focusType = 0,
 		racerId = 0,
 		drawKcl = true,
 		drawObjects = true,
@@ -1052,6 +1070,10 @@ mainCamera.useDelay = false
 mainCamera.active = false
 mainCamera.renderHitboxesWhenFakeGhost = config.renderHitboxesWhenFakeGhost
 mainCamera.drawRacers = false
+
+local FOCUS_RACER = 0
+local FOCUS_MAP_OBJ = 1
+local FOCUS_ITEM = 2
 
 local viewports = {}
 
@@ -1113,7 +1135,7 @@ updateDrawingRegions(mainCamera)
 Graphics.setPerspective(mainCamera, { 0, 0x1000, 0 })
 
 local function updateViewportBasic(viewport)
-	if viewport.racerId ~= -1 then
+	if viewport.focusType == FOCUS_RACER then
 		if viewport.frozen ~= true then
 			local racer = allRacers[viewport.racerId]
 			-- will be nil if we are watching the fake ghost but moved to a frame with no fake ghost data
@@ -1126,9 +1148,16 @@ local function updateViewportBasic(viewport)
 			end
 		end
 		viewport.obj = nil
-	elseif viewport.objFocus ~= nil and allObjects ~= nil then
+		return
+	end
+
+	local focusPtr = viewport.objFocus
+	if viewport.focusType == FOCUS_ITEM then
+		focusPtr = viewport.itemFocus
+	end
+	if allObjects ~= nil then
 		for _, obj in pairs(allObjects.list) do
-			if obj.skip == false and obj.ptr == viewport.objFocus then
+			if obj.skip == false and obj.ptr == focusPtr then
 				if viewport.frozen ~= true then viewport.location = obj.objPos end
 				viewport.obj = obj
 				return
@@ -1215,7 +1244,7 @@ local function _mkdsinfo_run_draw(isInRace)
 	
 	gui.clearGraphics("client")
 	gui.clearGraphics("emucore")
-	gui.cleartext()
+	--gui.cleartext()
 	if isInRace then
 		if config.showBottomScreenInfo then
 			drawInfoBottomScreen(focusedRacer)
@@ -1310,7 +1339,7 @@ local function _watchUpdate()
 	elseif Objects.isGhost(allRacers[watchingId].ptr) then
 		s = "ghost"
 	else
-		s = "cpu " .. watchingId
+		s = string.format("%i: %s", watchingId, getRacerName(allRacers[watchingId]))
 	end
 	forms.settext(form.watchLabel, s)
 
@@ -1331,88 +1360,137 @@ local function watchRightClick()
 	_watchUpdate()
 end
 
-local function shouldFocusOnObject(obj)
-	if obj.skip == true then
-		return false
-	elseif obj.isMapObject then
-		return obj.hitboxType ~= "no hitbox"
-	elseif obj.isItem then
-		-- TODO: What type of item is it?
-		return true
-	end
-end
-local function nextObj(beginId, direction)
+local function nextItem(beginId, direction)
 	if allObjects == nil then error("no objects list") end
+	local id = beginId
 	local endId = #allObjects.list
-	if direction == -1 then endId = 1 end
-	for i = beginId, endId, direction do
-		local obj = allObjects.list[i]
-		if shouldFocusOnObject(obj) then
+	for i = 1, endId do
+		id = (id + direction) % endId
+		if id == 0 then id = endId end
+		local obj = allObjects.list[id]
+		if not obj.skip and obj.isItem then
 			return obj
 		end
 	end
-	return nil
+	return allObjects.list[beginId]
+end
+local function nextObj(beginId, direction)
+	-- Perhaps it would make more sense to look from the itemSet instance lists?
+	if allObjects == nil then error("no objects list") end
+	local id = beginId
+	local endId = #allObjects.list
+	for i = 1, endId - 1 do
+		id = (id + direction) % endId
+		if id == 0 then id = endId end
+		local obj = allObjects.list[id]
+		if not obj.skip and obj.isMapObject and obj.hitboxType ~= "no hitbox" then
+			return obj
+		end
+	end
+	return allObjects.list[beginId]
+end
+
+local function updateFocus(viewport)
+	if viewport.focusType == FOCUS_RACER then
+		if viewport.racerId == 0 then
+			forms.settext(viewport.focusLabel, "player")
+		else
+			forms.settext(viewport.focusLabel, string.format("%i: %s%s",
+				viewport.racerId,
+				getRacerName(allRacers[viewport.racerId]),
+				(viewport.focusPreMovement and " (pre)") or "")
+			)
+		end
+	elseif viewport.focusType == FOCUS_MAP_OBJ then
+		local obj = allObjects[viewport.objFocus]
+		if viewport.objFocus == nil then
+			obj = nextObj(0, 1) -- a valid object, unless there are none to focus on
+			if obj ~= nil then
+				viewport.objFocus = obj.ptr
+			end
+		end
+		if obj ~= nil then
+			local name = Objects.mapObjTypes[obj.typeId] or string.format("unk (%i)", obj.typeId)
+			forms.settext(viewport.focusLabel, string.format("%s %x", name, obj.ptr & 0xfffff))
+		else
+			forms.settext(viewport.focusLabel, "no map objects")
+		end
+	elseif viewport.focusType == FOCUS_ITEM then
+		local obj = allObjects[viewport.itemFocus]
+		if viewport.itemFocus == nil then
+			obj = nextItem(0, 1) -- a valid object, unless there are none to focus on
+			if obj ~= nil then
+				viewport.itemFocus = obj.ptr
+			end
+		end
+		if obj ~= nil then
+			Objects.getObjectDetails(obj)
+			forms.settext(viewport.focusLabel, string.format("%s %x", obj.itemName, obj.ptr & 0xfffff))
+		else
+			forms.settext(viewport.focusLabel, "no items")
+		end
+	end
+	redraw()
 end
 local function focusClick(viewport, plusminus)
 	if allObjects == nil then error("no objects list") end
-	if viewport.racerId ~= -1 then
-		if viewport.racerId == 0 and ((viewport.focusPreMovement == false) == (plusminus == 1)) and viewport.scale < 250 then
+
+	if viewport.focusType == FOCUS_RACER then
+		if viewport.scale < 250 then
+			local changeRacer = viewport.focusPreMovement == (plusminus == 1)
 			viewport.focusPreMovement = not viewport.focusPreMovement
+			if changeRacer then
+				viewport.racerId = (viewport.racerId + plusminus) % (#allRacers + 1)
+			end
 		else
 			viewport.focusPreMovement = false
-			viewport.racerId = viewport.racerId + plusminus
-			if viewport.racerId == -1 or viewport.racerId == #allRacers + 1 then
-				local b = 1
-				if plusminus == -1 then b = #allObjects.list end
-				local obj = nextObj(b, plusminus)
-				viewport.racerId = -1
-				if obj ~= nil then
-					viewport.objFocus = obj.ptr
-					forms.settext(viewport.focusLabel, obj.itemName or Objects.mapObjTypes[obj.typeId] or string.format("unk (%i)", obj.typeId))
-					redraw()
-					return
-				elseif #allRacers > 0 then
-					viewport.racerId = #allRacers - 1
-				else
-					viewport.racerId = 0
-				end
-			elseif viewport.racerId == 0 then
-				viewport.focusPreMovement = plusminus == -1 and viewport.scale < 250
-			end
+			viewport.racerId = (viewport.racerId + plusminus) % (#allRacers + 1)
 		end
-	else
-		local obj = nil
-		if #allObjects.list ~= 0 then
-			-- Does our current focus object exist?
-			local currentId = nil
-			for i = 1, #allObjects.list do
-				if allObjects.list[i].ptr == viewport.objFocus then
-					if allObjects.list[i].skip == false then					
-						currentId = i
-					end
-					break
-				end
-			end
-			if currentId == nil then
-				-- No.
-				currentId = 0
-				if plusminus < 0 then currentId = #allObjects.list + 1 end
-			end
-			obj = nextObj(currentId + plusminus, plusminus)
-		end
-		if obj ~= nil then
-			viewport.objFocus = obj.ptr
-			forms.settext(viewport.focusLabel, obj.itemName or Objects.mapObjTypes[obj.typeId] or string.format("unk (%i)", obj.typeId))
-			redraw()
-			return
-		else
-			viewport.objFocus = nil
-			viewport.racerId = 0
-			if plusminus < 0 then viewport.racerId = #allRacers end
+		updateFocus(viewport)
+		return
+	end
+
+	local currentId = nil
+	local focusPtr = viewport.objFocus
+	if viewport.focusType == FOCUS_ITEM then focusPtr = viewport.itemFocus end
+	for i = 1, #allObjects.list do
+		if allObjects.list[i].ptr == focusPtr then
+			currentId = i
+			break
 		end
 	end
-	forms.settext(viewport.focusLabel, string.format("racer %i%s", viewport.racerId, (viewport.focusPreMovement and " (pre)") or ""))
-	redraw()
+	if viewport.focusType == FOCUS_MAP_OBJ then
+		if currentId ~= nil then
+			local obj = nextObj(currentId, plusminus)
+			viewport.objFocus = obj and obj.ptr
+		else
+			viewport.objFocus = nil
+		end
+	elseif viewport.focusType == FOCUS_ITEM then
+		if currentId ~= nil then
+			local obj = nextItem(currentId, plusminus)
+			viewport.itemFocus = obj and obj.ptr
+		else
+			viewport.itemFocus = nil
+		end
+	end
+	
+	updateFocus(viewport)
+end
+
+local function changeFocusType(viewport, forward)
+	if forward then viewport.focusType = viewport.focusType + 1
+	else viewport.focusType = viewport.focusType - 1 end
+	viewport.focusType = viewport.focusType % 3
+
+	if viewport.focusType == FOCUS_RACER then
+		forms.settext(viewport.focusTypeLabel, "racer")
+	elseif viewport.focusType == FOCUS_MAP_OBJ then
+		forms.settext(viewport.focusTypeLabel, "map object")
+	elseif viewport.focusType == FOCUS_ITEM then
+		forms.settext(viewport.focusTypeLabel, "item")
+	end
+	updateFocus(viewport)
 end
 
 local function setComparisonPointClick()
@@ -1732,7 +1810,28 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 	local rightmost = getRight(temp) + 0
 	y = y + 26
 	temp = forms.label(
-		kclForm, "Focus on:",
+		kclForm, "Focus type:",
+		x, y + 4
+	)
+	forms.setproperty(temp, "AutoSize", true)
+	temp = forms.button(
+		kclForm, "<", function() changeFocusType(viewport, false) end,
+		getRight(temp) + labelMargin*2, y,
+		18, 23
+	)
+	viewport.focusTypeLabel = forms.label(
+		kclForm, "racer",
+		getRight(temp) + labelMargin*2, y + 4
+	)
+	forms.setproperty(viewport.focusTypeLabel, "AutoSize", true)
+	temp = forms.button(
+		kclForm, ">", function() changeFocusType(viewport, true) end,
+		forms.getproperty(viewport.focusTypeLabel, "Left") / displayScale + 90, y,
+		18, 23
+	)
+	y = y + 26
+	temp = forms.label(
+		kclForm, "Focus:",
 		x, y + 4
 	)
 	forms.setproperty(temp, "AutoSize", true)
@@ -1742,13 +1841,13 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 		18, 23
 	)
 	viewport.focusLabel = forms.label(
-		kclForm, "racer 0",
+		kclForm, "player",
 		getRight(temp) + labelMargin*2, y + 4
 	)
 	forms.setproperty(viewport.focusLabel, "AutoSize", true)
 	temp = forms.button(
 		kclForm, ">", function() focusClick(viewport, 1) end,
-		forms.getproperty(viewport.focusLabel, "Left") / displayScale + 102, y,
+		forms.getproperty(viewport.focusLabel, "Left") / displayScale + 110, y,
 		18, 23
 	)
 
@@ -1775,7 +1874,8 @@ local function makeCollisionControls(kclForm, viewport, x, y)
 	temp = forms.checkbox(kclForm, "paths", x, y)
 	forms.setproperty(temp, "AutoSize", true)
 	forms.addclick(temp, function() viewport.drawPaths = not viewport.drawPaths; redraw(); end)
-	temp = forms.checkbox(kclForm, "enemys", x + 70, y)
+	y = y + 21
+	temp = forms.checkbox(kclForm, "enemys", x, y)
 	forms.setproperty(temp, "AutoSize", true)
 	forms.addclick(temp, function() viewport.drawEnemys = not viewport.drawEnemys; redraw(); end)
 
@@ -1996,7 +2096,7 @@ local function _mkdsinfo_setup()
 	MKDS_INFO_FORM_HANDLES = {}
 	
 	local noKclHeight = 142
-	local yesKclHeight = 222
+	local yesKclHeight = 245
 
 	form = {}
 	form.firstStateWithGhost = 0
@@ -2034,13 +2134,14 @@ local function _mkdsinfo_setup()
 		getRight(temp) + labelMargin, y,
 		18, 23
 	)
-	form.watchLabel = forms.label(form.handle, "player", getRight(form.watchLeft) + labelMargin, y + 4)
+	form.watchLabel = forms.label(form.handle, "7: Dry Bones", getRight(form.watchLeft) + labelMargin, y + 4)
 	forms.setproperty(form.watchLabel, "AutoSize", true)
 	form.watchRight = forms.button(
 		form.handle, ">", watchRightClick,
 		getRight(form.watchLabel) + labelMargin, y,
 		18, 23
 	)
+	forms.settext(form.watchLabel, "player")
 	
 	form.setComparisonPoint = forms.button(
 		form.handle, "Set comparison point", setComparisonPointClick,

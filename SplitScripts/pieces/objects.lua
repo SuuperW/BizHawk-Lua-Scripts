@@ -405,10 +405,8 @@ local function getObjectDetails(obj)
 	obj.basePos = obj.objPos
 	local flags = obj.flags
 	if flags & FLAG_MAPOBJ ~= 0 then
-		obj.isMapObject = true
 		getMapObjDetails(obj)
 	elseif flags & FLAG_ITEM ~= 0 then
-		obj.isItem = true
 		getItemDetails(obj)
 	elseif flags & FLAG_RACER ~= 0 then
 		getRacerObjDetails(obj)
@@ -484,6 +482,7 @@ local function readObjects()
 			skip = false,
 		}
 		if flags & FLAG_MAPOBJ ~= 0 then
+			obj.isMapObject = true
 			obj.typeId = memory.read_s16_le(obj.ptr)
 			if obj.typeId == 0x68 and isCoinCollected(objPtr) then
 				obj.skip = true
@@ -493,6 +492,7 @@ local function readObjects()
 				obj.skip = true
 			end
 		elseif flags & FLAG_ITEM ~= 0 then
+			obj.isItem = true
 			itemsThatAreObjs[objPtr] = true
 		elseif flags & FLAG_DYNAMIC == 0 then
 			obj.skip = true
@@ -517,6 +517,7 @@ local function readObjects()
 					ptr = itemPtr,
 					flags = FLAG_ITEM,
 					objPos = read_pos(itemPtr + 0x50),
+					isItem = true,
 				}
 				list[#list + 1] = newObjectsTable[itemPtr]
 			else

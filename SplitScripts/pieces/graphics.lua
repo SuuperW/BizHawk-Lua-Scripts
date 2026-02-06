@@ -688,7 +688,7 @@ local function drawCollisionPair(racer, obj)
 	elseif obj.hitboxType == "boxy" then
 		addToDrawingQue(-2, { HITBOX_PAIR, obj, racer })
 	end
-	
+
 	-- Specials
 	if (obj.typeId == 424 or obj.typeId == 436 or obj.typeId == 437) and racer ~= nil and racer.racerId ~= nil then
 		-- pinball bumpers
@@ -784,7 +784,7 @@ end
 local function processPackage(camera, package)
 	que = {}
 	local thing
-	if camera.racerId ~= -1 then
+	if camera.focusType == 0 then
 		thing = package.allRacers[camera.racerId]
 	else
 		thing = camera.obj
