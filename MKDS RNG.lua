@@ -107,6 +107,12 @@ local function newBeginning(index)
 	}
 	currentBegin = index
 end
+local function deleteBeginning(index)
+	for i = index, #begins - 1 do
+		begins[i] = begins[i + 1]
+	end
+	begins[#begins] = nil
+end
 local function restoreFromHistory()
 	local frame = emu.framecount()
 	if frame < begins[1].frame then
@@ -123,7 +129,7 @@ local function restoreFromHistory()
 		if frame >= startFrame and frame < endFrame then
 			if haveHistory then
 				trackingSince = startFrame
-				local totalChanges = 0
+				totalChanges = 0
 				for j = startFrame, frame - 1 do
 					totalChanges = totalChanges + history[j]
 				end
@@ -134,7 +140,9 @@ local function restoreFromHistory()
 				end
 				return true
 			else
-				newBeginning(i + 1)
+				if startFrame ~= frame then
+					newBeginning(i + 1)
+				end
 				return true
 			end
 		end
@@ -164,6 +172,11 @@ local function runNormalRngCheck()
 			print(prevRng)
 			initialize()
 			error("Unable to compute RNG state change.")
+		end
+		
+		local nextBegin = begins[currentBegin + 1]
+		if nextBegin ~= nil and nextBegin.frame == emu.framecount() then
+			deleteBeginning(currentBegin + 1)
 		end
 	else
 		-- New beginning
