@@ -9,6 +9,7 @@ local trackingSince = nil
 local history = {}
 local begins = {}
 local currentBegin = nil
+local startedFrame = false
 
 local function read_u64(ptr)
 	local a = memory.read_u32_le(ptr)
@@ -188,7 +189,13 @@ end
 local lastFrame = emu.framecount()
 local function fn()
 	local frame = emu.framecount()
-	if frame == lastFrame + 1 then
+	local doFrame = startedFrame
+	startedFrame = false
+	if doFrame and frame ~= lastFrame + 1 then
+		error("unexpected frmae")
+	end
+
+	if doFrame then
 		runNormalRngCheck()
 		doRngHack()
 		if #begins > currentBegin and begins[currentBegin + 1].frame == frame then
@@ -239,7 +246,10 @@ function getrng(asstring)
 end
 
 local funcs = {}
-funcs[#funcs + 1] = event.onframestart(function() prevRng = read_u64(rngToWatch.ptr) end)
+funcs[#funcs + 1] = event.onframestart(function()
+	prevRng = read_u64(rngToWatch.ptr)
+	startedFrame = true
+end)
 funcs[#funcs + 1] = event.onframeend(fn)
 
 local function clean()
