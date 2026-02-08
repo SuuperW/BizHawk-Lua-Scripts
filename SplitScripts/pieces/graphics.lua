@@ -326,11 +326,13 @@ local function processQue(camera)
 						end
 					else
 						local fill = color
+						color = color | 0xff000000
 						if object.objRadius > 0xd000 then fill = color & 0x3fffffff end
 						makeCircle(point2D, radius, color, fill)
 					end
 				elseif hitboxType == "item" then
 					local fill = color
+					color = color | 0xff000000
 					if object.itemRadius > 0xd000 then fill = color & 0x3fffffff end
 					local radius = scaleAtDistance(object.itemPos, object.itemRadius, camera)
 					makeCircle(point3Dto2D(object.itemPos, camera), radius, color, fill)
@@ -437,8 +439,6 @@ local function drawRacers(allRacers, focusedRacer, showEnemyDetails)
 	local count = #allRacers
 	local isTT = count <= 2
 
-	-- Primary hitbox circle is blue
-	local color = 0xff0000ff
 	local movementColor = 0xffffffff
 	local p = -3
 	for i = 0, count do
@@ -450,6 +450,11 @@ local function drawRacers(allRacers, focusedRacer, showEnemyDetails)
 			pos = racer.objPos
 			radius = racer.objRadius
 			type = "spherical"
+		end
+		local color = 0xff0000ff -- player
+		if i ~= 0 then
+			if racer.isGhost or racer.farFromPlayer then color = 0x48ff5080
+			else color = 0xc030a0e0 end
 		end
 		addToDrawingQue(p, { HITBOX, racer, type, color })
 		lineFromVector(pos, allRacers[i].movementDirection, radius, movementColor, 5)
@@ -490,7 +495,6 @@ local function drawRacers(allRacers, focusedRacer, showEnemyDetails)
 			end
 		end
 		-- Others are a translucent red
-		color = 0x48ff5080
 		movementColor = 0xcccccccc
 		p = -1
 	end
@@ -676,6 +680,7 @@ end
 
 local function drawObjectCollision(obj)
 	if obj.skip == true then return end
+	if obj.isRacerObj then return end -- racers are drawn elsewhere
 
 	local objColor = 0xff40c0e0
 	if obj.typeId == 106 then objColor = 0xffffff11 end
@@ -684,7 +689,7 @@ end
 local function drawCollisionPair(racer, obj)
 	if obj.hitboxType == "spherical" or obj.hitboxType == "item" then
 		-- White circles to indicate size of hitbox cross-section at the current elevation.
-		addToDrawingQue(-1, { HITBOX_PAIR, obj, racer })
+		addToDrawingQue(0, { HITBOX_PAIR, obj, racer })
 	elseif obj.hitboxType == "boxy" then
 		addToDrawingQue(-2, { HITBOX_PAIR, obj, racer })
 	end
@@ -725,10 +730,8 @@ local function makeObjectsQue(focusObject, camera)
 	for i = 1, #objects do
 		drawObjectCollision(objects[i])
 	end
-	-- A focused racer will have a KCL hitbox drawn. Other things won't.
-	if not focusObject.isRacer then
-		drawObjectCollision(focusObject)
-	end
+	drawObjectCollision(focusObject)
+
 	local result = Objects.getObjectDistances(objects, focusObject)
 	local list = result[1]
 	if #list == 0 then list = { result[2] } end
@@ -788,11 +791,11 @@ local function processPackage(camera, package)
 		thing = package.allRacers[camera.racerId]
 	else
 		thing = camera.obj
-	end
-	if thing ~= nil then
-		Objects.getObjectDetails(thing)
-	else
-		return {}
+		if thing ~= nil then
+			Objects.getObjectDetails(thing)
+		else
+			return {}
+		end
 	end
 	if camera.active then
 		if camera.drawKcl == true then

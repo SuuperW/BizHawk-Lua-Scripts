@@ -398,9 +398,7 @@ local function isGhost(objPtr)
 	return flags7c & 0x04 ~= 0
 end
 local function getObjectDetails(obj)
-	-- isRacer is used to identify the racer Lua tables
-	-- Those already have racer's details and should not also get object's details.
-	if obj.gotDetails == true or obj.isRacer == true then return end
+	if obj.gotDetails == true then return end
 	obj.gotDetails = true
 	obj.basePos = obj.objPos
 	local flags = obj.flags
@@ -491,6 +489,7 @@ local function readObjects()
 			if isGhost(objPtr) then
 				obj.skip = true
 			end
+			obj.isRacerObj = true
 		elseif flags & FLAG_ITEM ~= 0 then
 			obj.isItem = true
 			itemsThatAreObjs[objPtr] = true

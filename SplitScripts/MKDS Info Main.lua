@@ -279,6 +279,7 @@ local function getRacerBasicData(ptr)
 	newData.movementDirection = read_pos(ptr + 0x68)
 	newData.movementTarget = read_pos(ptr + 0x50)
 	newData.racerId = memory.read_u8(ptr + 0x74)
+	newData.farFromPlayer = memory.read_u8(ptr + 0x48 + 3) & 0x08 ~= 0
 
 	return newData
 end
@@ -294,6 +295,7 @@ local function getRacerBasicData2(raw)
 	newData.movementTarget = get_pos(raw, 0x50)
 	newData.racerId = raw[0x74]
 	newData.colEntryId = raw[0x2c8]
+	newData.farFromPlayer = raw[0x48 + 3] & 0x08 ~= 0
 
 	return newData
 end
@@ -371,7 +373,8 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	end
 	newData.spawnPoint = get_s32(allData, 0x3C4)
 	newData.flags44 = get_u32(allData, 0x44)
-	
+	newData.farFromPlayer = allData[0x48 + 3] & 0x08 ~= 0
+
 	-- extra movement
 	newData.bouce_1 = get_pos(allData, 0x1fc)
 	newData.bouce_2 = get_pos(allData, 0x2f0)
@@ -865,7 +868,7 @@ local textDisplayOptions = {
 			diff = { diff[1] // 0x1000, diff[2] // 0x1000, diff[3] // 0x1000 }
 			local roughDistance = diff[1] * diff[1] + diff[2] * diff[2] + diff[3] * diff[3]
 			local lines = { string.format("Dist to player: %.1f", math.sqrt(roughDistance)) }
-			if data.racerData[0x48 + 3] & 0x08 ~= 0 then
+			if data.farFromPlayer then
 				lines[1] = lines[1] .. " (FAR)"
 			end
 			-- racerData.3.enemyState.fieldA8
