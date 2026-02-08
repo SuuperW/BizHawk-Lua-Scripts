@@ -600,9 +600,14 @@ local function getObjectDistances(objects, thing)
 				obj.distance = math.max(obj.distanceComponents.h, obj.distanceComponents.v)
 			end
 		elseif obj.hitboxType == "item" then
-			local relative = Vector.subtract(thing.itemPos, obj.itemPos)
-			local distance = math.sqrt(relative[1] * relative[1] + relative[2] * relative[2] + relative[3] * relative[3])
-			obj.distance = distance - thing.itemRadius - obj.itemRadius
+			local info = memory.read_u16_le(obj.ptr + 0x78)
+			if info & 0x4000 ~= 0 and thing.isRacer and thing.racerId == info & 0xff then
+				obj.distance = 999999999
+			else
+				local relative = Vector.subtract(thing.itemPos, obj.itemPos)
+				local distance = math.sqrt(relative[1] * relative[1] + relative[2] * relative[2] + relative[3] * relative[3])
+				obj.distance = distance - thing.itemRadius - obj.itemRadius
+			end
 		elseif obj.boxy then
 			obj.distanceComponents = getBoxyDistances(obj, thing.objPos, thing.objRadius)
 			-- TODO: Do all dynamic boxy objects have racer-spherical hitboxes?
