@@ -1429,8 +1429,10 @@ local function updateFocus(viewport)
 		if obj ~= nil then
 			Objects.getObjectDetails(obj)
 			forms.settext(viewport.focusLabel, string.format("%s %x", obj.itemName, obj.ptr & 0xfffff))
-		else
+		elseif viewport.itemFocus == nil then
 			forms.settext(viewport.focusLabel, "no items")
+		else
+			forms.settext(viewport.focusLabel, string.format("destroyed item %x", viewport.itemFocus & 0xfffff))
 		end
 	end
 	redraw()
