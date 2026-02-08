@@ -529,7 +529,13 @@ local function readObjects()
 				obj.skip = false
 				obj.boundingSize = Memory.get_u32(rawColEntryList, obj.colEntryId * 0x1C + 0x10)	
 			else
-				obj.skip = true
+				-- blue shell
+				if memory.read_u8(itemPtr + 0x44) == 5 then
+					obj.skip = false
+					obj.boundingSize = 0
+				else
+					obj.skip = true
+				end
 			end
 		end
 	end
