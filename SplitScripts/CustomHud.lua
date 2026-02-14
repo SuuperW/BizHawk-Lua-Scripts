@@ -778,7 +778,7 @@ local function GetSpeed(racerPtr)
 end
 
 local function GetInputsFromGame(id)
-	local pad = Memory.addrs.ptrInputUnits + id * 0x5C
+	local pad = Memory.addrs.InputUnits + id * 0x5C
 	local buttons = memory.read_u16_le(pad + 2)
 
 	local inputs = {}

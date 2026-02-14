@@ -93,6 +93,8 @@ else
 	print("You're using an unsupported version of BizHawk.")
 end
 
+global_fastnessFrames = global_fastnessFrames or 0
+
 -- I've split this file into multiple files to keep it more organized.
 -- Unfortunately, BizHawk doesn't give each Lua script it's own environment and using require does not work nicely or reliably.
 -- I am using dofile instead.
@@ -280,6 +282,7 @@ local function getRacerBasicData(ptr)
 	newData.movementTarget = read_pos(ptr + 0x50)
 	newData.racerId = memory.read_u8(ptr + 0x74)
 	newData.farFromPlayer = memory.read_u8(ptr + 0x48 + 3) & 0x08 ~= 0
+	newData.isGhost = memory.read_u8(ptr + 0x7C) & 0x04 ~= 0
 
 	return newData
 end
@@ -296,6 +299,7 @@ local function getRacerBasicData2(raw)
 	newData.racerId = raw[0x74]
 	newData.colEntryId = raw[0x2c8]
 	newData.farFromPlayer = raw[0x48 + 3] & 0x08 ~= 0
+	newData.isGhost = raw[0x7C] & 0x04 ~= 0
 
 	return newData
 end
@@ -304,13 +308,8 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 		error("Attempted to get racer details for nil racer.")
 	end
 
-	local newData = { racerData = allData }
-	newData.isRacer = true
+	local newData = getRacerBasicData2(allData)
 	-- Read positions and speed
-	newData.basePos = get_pos(allData, 0x80)
-	newData.objPos = get_pos(allData, 0x1B8) -- also used for collision
-	newData.preMovementObjPos = get_pos(allData, 0x1C4) -- this too is used for collision
-	newData.itemPos = get_pos(allData, 0x1D8) -- also for racer-racer collision
 	newData.speed = get_s32(allData, 0x2A8)
 	newData.basePosDelta = get_pos(allData, 0xA4)
 	newData.bpdNormalized = get_pos(allData, 0xB0)
@@ -331,8 +330,6 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	newData.pitch = get_s16(allData, 0x234)
 	newData.driftAngle = get_s16(allData, 0x388)
 	--newData.wideDrift = get_s16(allData, 0x38A) -- Controls tightness of drift when pressing outside direction, and rate of drift air spin.
-	newData.movementDirection = get_pos(allData, 0x68)
-	newData.movementTarget = get_pos(allData, 0x50)
 	--newData.targetMovementVectorSigned = get_pos(allData, 0x5c)
 	newData.snQuaternion = get_quaternion(allData, 0xf0)
 	newData.snqTarget = get_quaternion(allData, 0x100)
@@ -359,10 +356,8 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	-- surface/collision stuffs
 	newData.surfaceNormalVector = get_pos(allData, 0x244)
 	newData.grip = get_s32(allData, 0x240)
-	newData.objRadius = get_s32(allData, 0x1d0)
 	--newData.radiusMult = get_s32(allData, 0x4c8)
 	newData.statsPtr = get_u32(allData, 0x2cc)
-	newData.itemRadius = newData.objRadius
 
 	-- status things
 	newData.framesInAir = get_s32(allData, 0x380)
@@ -373,7 +368,6 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	end
 	newData.spawnPoint = get_s32(allData, 0x3C4)
 	newData.flags44 = get_u32(allData, 0x44)
-	newData.farFromPlayer = allData[0x48 + 3] & 0x08 ~= 0
 
 	-- extra movement
 	newData.bouce_1 = get_pos(allData, 0x1fc)
@@ -396,8 +390,6 @@ local function getRacerDetails(allData, previousData, isSameFrame)
 	--newData.test = get_s32(allData, 0x1d4)
 	--newData.scale = get_s32(allData, 0xc4)
 	--newData.f230 = get_u32(allData, 0x230)
-	newData.racerId = get_s32(allData, 0x74)
-	newData.colEntryId = allData[0x2c8]
 
 	-- Item
 	local itemDataPtr = memory.read_s32_le(Memory.addrs.ptrItemInfo) + 0x210 * allData[0x74]
@@ -444,7 +436,7 @@ local function getCheckpointData(dataObj)
 end
 
 local function setGhostInputs(form)
-	local ptr = memory.read_s32_le(Memory.addrs.ptrInputUnits + 0x5c + 0x28)
+	local ptr = memory.read_s32_le(Memory.addrs.InputUnits + 0x5c + 0x28)
 	if ptr == 0 then error("How are you here?") end
 	
 	local currentInputs = memory.read_bytes_as_array(ptr, 0xdce)
@@ -615,7 +607,7 @@ local characterNames = {
 characterNames[0] = "Mario"
 local function getRacerName(racer)
 	local charIdPtr = nil
-	if racer.ptr ~= 0 then
+	if racer.ptr ~= nil then
 		charIdPtr = memory.read_u32_le(racer.ptr + 0x590)		
 	else
 		charIdPtr = get_u32(racer.racerData, 0x590)
@@ -625,6 +617,8 @@ end
 
 -- Main info function
 local function _mkdsinfo_run_data(isSameFrame)
+	if global_fastnessFrames > 2 then return end
+
 	racerCount = memory.read_s32_le(Memory.addrs.racerCount)
 	local raceFrame = memory.read_s32_le(ptrRaceTimers + 4)
 	local watchingFakeGhost = watchingId == racerCount
@@ -658,7 +652,7 @@ local function _mkdsinfo_run_data(isSameFrame)
 	if watchingId == 0 then
 		getCheckpointData(focusedRacer) -- This function only supports player.
 
-		local ghostExists = racerCount >= 2 and Objects.isGhost(ptrRacerData + 0x5a8)
+		local ghostExists = racerCount >= 2 and newRacers[1].isGhost
 		if ghostExists then
 			focusedRacer.ghost = newRacers[1]
 		end
@@ -1230,6 +1224,8 @@ end
 
 -- Main drawing function
 local function _mkdsinfo_run_draw(isInRace)
+	if global_fastnessFrames > 0 then return end
+
 	-- BizHawk is slow. Let's tell it to not worry about waiting for this.
 	if not client.ispaused() and not drawWhileUnpaused then
 		if client.isseeking() then
@@ -1323,7 +1319,7 @@ local function useInputsClick()
 	end
 	
 	if form.ghostInputs == nil then
-		form.ghostInputs = memory.read_bytes_as_array(memory.read_s32_le(Memory.addrs.ptrInputUnits + 0x28), 0xdce)
+		form.ghostInputs = memory.read_bytes_as_array(memory.read_s32_le(Memory.addrs.InputUnits + 0x28), 0xdce)
 		form.firstGhostInputFrame = frame - memory.read_s32_le(memory.read_s32_le(Memory.addrs.ptrRaceTimers) + 4) + 121
 		form.ghostLapTimes = memory.read_bytes_as_array(memory.read_s32_le(Memory.addrs.ptrRaceStatus) + 0x20, 0x4 * 5)
 		setGhostInputs(form)
@@ -1339,7 +1335,7 @@ local function _watchUpdate()
 		s = "player"
 	elseif watchingId == racerCount then
 		s = "fake ghost"
-	elseif Objects.isGhost(allRacers[watchingId].ptr) then
+	elseif allRacers[watchingId].isGhost then
 		s = "ghost"
 	else
 		s = string.format("%i: %s", watchingId, getRacerName(allRacers[watchingId]))

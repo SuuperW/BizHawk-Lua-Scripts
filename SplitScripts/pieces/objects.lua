@@ -641,7 +641,6 @@ _export = {
 	loadCourseData = loadCourseData,
 	queryObjects = queryObjects,
 	getObjectDistances = getObjectDistances,
-	isGhost = isGhost,
 	getBoxyPolygons = getBoxyPolygons,
 	mapObjTypes = mapObjTypes,
 	readObjects = readObjects,

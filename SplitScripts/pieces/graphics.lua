@@ -453,7 +453,7 @@ local function drawRacers(allRacers, focusedRacer, showEnemyDetails)
 		end
 		local color = 0xff0000ff -- player
 		if i ~= 0 then
-			if racer.isGhost or racer.farFromPlayer then color = 0x48ff5080
+			if racer.isGhost or racer.fake or racer.farFromPlayer then color = 0x48ff5080
 			else color = 0xc030a0e0 end
 		end
 		addToDrawingQue(p, { HITBOX, racer, type, color })
@@ -494,8 +494,6 @@ local function drawRacers(allRacers, focusedRacer, showEnemyDetails)
 				addToDrawingQue(p, { POLYGON, points, 0xaa00ee00, nil })
 			end
 		end
-		-- Others are a translucent red
-		movementColor = 0xcccccccc
 		p = -1
 	end
 
