@@ -2069,7 +2069,7 @@ local function _mkdsinfo_close()
 	end
 	
 	-- Undo camera hack
-	if watchingId ~= 0 and inRace() then
+	if watchingId ~= 0 and inRace() and config.enableCameraFocusHack then
 		local raceThing = memory.read_u32_le(Memory.addrs.ptrRaceMultiConfig)
 		memory.write_u8(raceThing + 0x62, 0)
 		memory.write_u8(raceThing + 0x63, 0)
