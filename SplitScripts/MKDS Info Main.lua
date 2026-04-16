@@ -1241,9 +1241,6 @@ local function _mkdsinfo_run_draw(isInRace)
 		end
 	end
 	
-	gui.clearGraphics("client")
-	gui.clearGraphics("emucore")
-	--gui.cleartext()
 	if isInRace then
 		if config.showBottomScreenInfo then
 			drawInfoBottomScreen(focusedRacer)
@@ -1272,7 +1269,6 @@ end
 local function redraw(farRewind)
 	-- BizHawk won't clear it for us on the next frame, if we don't actually draw anything on the next frame.
 	gui.clearGraphics("client")
-	gui.clearGraphics("emucore")
 	gui.cleartext()
 
 	-- If we are not paused, there's no point in redrawing. The next frame will be here soon enough.
@@ -1609,6 +1605,7 @@ local function branchLoadHandler(branchId)
 		tastudio.onbranchload(function() end)
 		return
 	end
+	gui.cleartext() -- BizHawk won't do this automatically
 	if form.firstStateWithGhost ~= 0 then
 		form.firstStateWithGhost = 0
 	end
@@ -2076,7 +2073,6 @@ local function _mkdsinfo_close()
 	end
 
 	gui.clearGraphics("client")
-	gui.clearGraphics("emucore")
 	gui.cleartext()
 	hasClosed = true
 end
@@ -2299,11 +2295,6 @@ local function main()
 	end
 	if not hasClosed then _mkdsinfo_close() end
 end
-
-gui.clearGraphics("client")
-gui.clearGraphics("emucore")
-gui.use_surface("emucore")
-gui.cleartext()
 
 if tastudio.engaged() then
 	bizHawkEventIds[#bizHawkEventIds + 1] = tastudio.onbranchload(branchLoadHandler)
